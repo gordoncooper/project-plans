@@ -34,8 +34,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D5
 
-- Decision: the k3s version is pinned in `cluster-vars.yaml` and changes only by PR. Renovate does not bump it.
-- Reason: R33 covers container images. The host binary has no stated updater.
+- Decision: the k3s version is pinned in `cluster-vars.yaml` and changes only by PR. Renovate does not manage it.
+- Reason: R33 requires that pin. Renovate manages image digests and does not manage the k3s host binary.
 - Where: k3s role (`p0a-12`).
 - Status: accepted-with-plan default.
 
@@ -156,9 +156,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D21
 
-- Decision: cron times use the node’s local clock. homelab stuck-updates at 06:30 daily. Morning brief at 07:00 daily. Evening wrap at 18:00 daily. Weekly review Monday at 07:30.
-- Reason: the jobs must arrive at a scheduled time and no clock is given. Stuck-updates runs before the brief so the brief can carry its line.
-- Where: `envs/env-01/values/hermes.yaml` (`p3-03`, `p3-04`).
+- Decision: cron times use America/Los_Angeles. homelab stuck-updates at 06:30 daily. Morning brief at 07:00 daily. Evening wrap at 18:00 daily. Weekly review Monday at 07:30.
+- Reason: env-01 runs on America/Los_Angeles, and the time zone is part of the env schema. The node and the Hermes schedules both use it. Stuck-updates runs before the brief so the brief can carry its line.
+- Where: `p0a-01`, `p0a-11`, `envs/env-01/values/hermes.yaml` (`p3-03`, `p3-04`).
 - Status: Confirmed by Gordon 2026-10-19.
 
 ## D22
@@ -212,8 +212,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D29
 
-- Decision: homelab reads metrics through an in-repo read-only Python MCP at `services/hermes/core/skills/metrics/` against VictoriaMetrics. Cluster and Flux reads use a digest-or-version-pinned `kubernetes-mcp-server` in read-only mode.
-- Reason: the P2 homelab seeds ask which service uses the most memory. §4 names the Kubernetes MCP and names no metrics MCP.
+- Decision: homelab reads metrics through mcp-victoriametrics, the official VictoriaMetrics MCP server, read-only, as a pinned release binary on the deploy volume. Cluster and Flux reads use a digest-or-version-pinned `kubernetes-mcp-server` in read-only mode.
+- Reason: the P2 homelab seeds ask which service uses the most memory. §4 names mcp-victoriametrics for those reads and the Kubernetes MCP for cluster and Flux reads.
 - Where: `p2-12`.
 - Status: accepted-with-plan default.
 
@@ -247,8 +247,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D34
 
-- Decision: the Ubuntu install creates SSH user `gordon` with Gordon’s SSH key. Ansible uses that user.
-- Reason: `site.yml` needs a login and none is named. Gordon’s user is the one that runs `site.yml` (§8).
+- Decision: the Ubuntu install creates SSH user `admin` with Gordon’s SSH key. Ansible uses that user.
+- Reason: `site.yml` needs a login and none is named. The admin-* identifier rule matches the dashboard username (D16). This user is the one that runs `site.yml` (§8).
 - Where: `p0a-12`.
 - Status: accepted-with-plan default.
 
@@ -261,9 +261,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D36
 
-- Decision: the in-repo geo and metrics MCP servers use the Hermes image’s Python standard library only.
-- Reason: they run on the image’s Python (§5). A package download at start is what pinning avoids for in-repo servers.
-- Where: `p2-11`, `p2-12`.
+- Decision: the in-repo geo MCP server uses the Hermes image’s Python standard library only.
+- Reason: it runs on the image’s Python (§5). A package download at start is what pinning avoids for the in-repo geo server. Metric reads use mcp-victoriametrics (D29).
+- Where: `p2-11`.
 - Status: accepted-with-plan default.
 
 ## D37
