@@ -102,7 +102,7 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Depends on:  p0a-01, p0a-02
 Touches:     jarvis Makefile, docs/README.md, .sops.yaml, envs/env-01/, rulebooks/ left for p0a-17
 Hard limits: R3; R10; R25 (hostnames only; the age public key is the recipient Gordon provides). D1; D2. Create only paths this checkpoint uses. Hermes deploy folders, app-hosting, and observability wait for their phases. docs/README.md points at project-plans and does not copy the framework (§6).
-Done checks: cluster-vars.yaml sets code_delivery: github, build_agent: cursor, DNS suffix alpha.lan, time zone America/Los_Angeles, and the §7 retention. hermes.yaml holds the §7 tier map and an empty bot list. apps.yaml has app hosting off. envs/env-01/README.md states purpose, what deploys, and promotion. One PR.
+Done checks: cluster-vars.yaml sets code_delivery: github, build_agent: cursor, DNS suffix alpha.lan, time zone America/Los_Angeles, and the §7 retention. hermes.yaml holds the §7 tier map and an empty bot list. apps.yaml has app hosting off. inventory/hosts.yml lists bench.lan (D2). envs/env-01/README.md states purpose, what deploys, and promotion. One PR.
 Timebox:     6h
 ```
 

@@ -2,7 +2,7 @@
 
 Defaults chosen where `framework.md` is silent. Merging PR #2 accepts all defaults except those marked Confirmed by Gordon.
 
-Confirmed by Gordon 2026-10-19: D1, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. The other entries are accepted-with-plan defaults.
+Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. The other entries are accepted-with-plan defaults.
 
 These are the §11 defaults. They are recorded here. They are not copied into framework §10: this change adds only this file and `plan.md`.
 
@@ -15,10 +15,10 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D2
 
-- Decision: the env-01 Ansible hostname is `env-01`. If Ansible cannot resolve it, the IP goes in `group_vars/*.sops.yaml` only.
-- Reason: the inventory lists hostnames only (R25) and no hostname is given.
-- Where: `envs/env-01/inventory` (`p0a-03`, `p0a-12`).
-- Status: accepted-with-plan default.
+- Decision: the env-01 Ansible inventory host is `bench.lan`. The env stays named env-01.
+- Reason: it is the name the LAN DNS resolves, so no IP or alias is needed, and the inventory stays hostname-only (R25).
+- Where: `envs/env-01/inventory/hosts.yml` (`p0a-03`, `p0a-12`).
+- Status: Confirmed by Gordon 2026-10-19.
 
 ## D3
 
