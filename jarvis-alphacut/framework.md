@@ -566,7 +566,7 @@ OQ7. Closed 2026-10-19 as a Phase 0 check (resolved by the test; the fallback is
 
 OQ8. Closed 2026-10-19, approved by Gordon: plain Kubernetes Ingress on k3s-bundled Traefik; no Gateway API (§4).
 
-OQ9. Closed 2026-10-19 (not marked “approved by Gordon” in the source; confirm): logs = Fluent Bit → VictoriaLogs; metrics = vmagent + node-exporter + kube-state-metrics → VictoriaMetrics; Grafana. No fallbacks (recorded in §4).
+OQ9. Closed 2026-10-19, approved by Gordon 2026-10-19: logs = Fluent Bit → VictoriaLogs; metrics = vmagent + node-exporter + kube-state-metrics → VictoriaMetrics; Grafana. No fallbacks (recorded in §4).
 
 OQ10. Closed 2026-10-19, approved by Gordon: node OS = Ubuntu 26.04 Server, minimal install, fresh install; JARVIS local DNS = CoreDNS with the k8s_gateway plugin on the node IP, assuming the router forwards alpha.lan lookups (env-01’s DNS suffix, R28) to it (router config is Gordon-owned); GHCR as the registry for images CI builds from jarvis-apps (recorded in §4).
 
