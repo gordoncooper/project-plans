@@ -2,7 +2,7 @@
 
 Defaults chosen where `framework.md` is silent. Merging PR #2 accepts all defaults except those marked Confirmed by Gordon.
 
-Confirmed by Gordon 2026-10-19: D1, D4, D19, D21, D22, D24, D26, D27, D38, D39, D40, D41. The other entries are accepted-with-plan defaults.
+Confirmed by Gordon 2026-10-19: D1, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. The other entries are accepted-with-plan defaults.
 
 These are the §11 defaults. They are recorded here. They are not copied into framework §10: this change adds only this file and `plan.md`.
 
@@ -249,10 +249,10 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D34
 
-- Decision: the Ubuntu install creates SSH user `admin` with Gordon’s SSH key. Ansible uses that user.
-- Reason: `site.yml` needs a login and none is named. The admin-* identifier rule matches the dashboard username (D16). This user is the one that runs `site.yml` (§8).
-- Where: `p0a-12`.
-- Status: accepted-with-plan default.
+- Decision: the node SSH user is an env setting, `ssh_user` in `cluster-vars.yaml`, default `ubuntu`. Gordon installs Ubuntu with his SSH key on that user. `site.yml` sets `ansible_user` from it and runs every task as root with become; k3s is a root systemd service, and nothing installs under that user.
+- Reason: the user is only a login, so the Ubuntu default needs no extra user, and an env that differs changes one value (R3, R4).
+- Where: `p0a-01`, `p0a-06`, `p0a-12`, `p0a-13`.
+- Status: Confirmed by Gordon 2026-10-19.
 
 ## D35
 
