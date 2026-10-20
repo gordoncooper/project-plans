@@ -159,7 +159,7 @@ Done: make verify PHASE=p3 output attached.
 - The morning brief arrives at its scheduled time with calendar, email and weather (Open-Meteo, attributed; “weather unavailable” if it is down), and reaches Telegram [G].
 - The evening wrap arrives at its scheduled time with the day’s unread inbox threads, ranked by importance in chat only, and tomorrow’s calendar, and reaches Telegram [G].
 - The weekly review arrives at its scheduled time with the past week’s calendar and email highlights and the coming week’s calendar, and reaches Telegram [G].
-- homelab’s scheduled “watch for stuck updates” check reads Renovate PRs and their check runs and annotations from the public repos (no credential; CI reports each failure as an ::error annotation): a seeded Renovate PR whose required check failed on its last 2 runs, or that has been open more than 7 days, produces one finding with the error and a suggested fix in homelab’s dashboard session, and the next morning brief carries a “stuck updates” line pointing to it.
+- homelab’s scheduled “watch for stuck updates” check reads Renovate PRs and their check runs and annotations from the public repos (the no-repos public-read-only token, R13; CI reports each failure as an ::error annotation): a seeded Renovate PR whose required check failed on its last 2 runs, or that has been open more than 7 days, produces one finding with the error and a suggested fix in homelab’s dashboard session, and the next morning brief carries a “stuck updates” line pointing to it.
 - Each read skill is covered by an eval in its bot’s evals/.
 - Asked in chat to draft a reply to a seeded email, inbox creates one Gmail draft in that thread and nothing is sent (the Sent folder is unchanged).
 - An eval asserts no bot can send, delete, apply Gmail labels, write to calendar or reach Drive.
@@ -342,7 +342,7 @@ Format: tool — role — swap boundary.
 - VictoriaMetrics and VictoriaLogs, single-node — metric and log storage with retention — Prometheus query API, LogsQL.
 - mcp-victoriametrics (official, read-only, pinned binary on the deploy volume) — homelab metric reads — MCP.
 - workspace-mcp (taylorwilsdon/google_workspace_mcp, pinned uv package on the deploy volume; no send tool, drafts on inbox only) — Gmail and Calendar reads, inbox drafts — MCP.
-- github-mcp-server (official, pinned release binary on the deploy volume; read-only in ops, issues toolset for spec-writer) — PR, check-run and annotation reads; spec-writer issue filing — MCP.
+- github-mcp-server (official, pinned release binary on the deploy volume; read-only in ops, issues toolset for spec-writer with the code-factory App) — PR, check-run and annotation reads; spec-writer issue filing — MCP.
 - Fluent Bit (DaemonSet) — log shipper: container and node logs to VictoriaLogs — stdout logs.
 - vmagent with node-exporter and kube-state-metrics — metric collection: node, Kubernetes-object and /metrics targets to VictoriaMetrics — Prometheus exporters and scrape config.
 - Grafana — dashboards and Grafana-managed metric and log alerts to Telegram — data sources and alert rules in Git.
@@ -471,7 +471,7 @@ jarvis-apps/
 
 ## 8. Bootstrap
 
-### Secrets and accounts (honest count: 15 entries; Gordon creates 12; two Telegram bot tokens at launch: concierge and the send-only alerts bot)
+### Secrets and accounts (honest count: 16 entries; Gordon creates 13; two Telegram bot tokens at launch: concierge and the send-only alerts bot)
 
 Format: item — created by — stored in — used by. SOPS files are envs/<env>/secrets/<component>-<purpose>.sops.yaml; an Actions secret names its repo.
 
@@ -488,6 +488,7 @@ Format: item — created by — stored in — used by. SOPS files are envs/<env>
 - gordon5417-ai classic token (public_repo and workflow scopes; the bastion’s own token, not shared with any other tool) — Gordon, signed in as gordon5417-ai, pasted onto the bastion — bastion agent user only — coding agents.
 - Telegram bot token for concierge, the only Telegram-facing bot at first (one more token per Telegram-facing bot added later, R21), plus Gordon’s user ID — Gordon — SOPS — hermes-ops.
 - Google OAuth client and refresh token for Gmail and Calendar read plus Gmail drafts — Gordon publishes the OAuth app as In production (unverified, personal use; accepts the warning screen) and runs make google-consent once on the bastion — SOPS — hermes-ops only.
+- No-repos public-read-only GitHub token (fine-grained, Gordon’s account, no repos selected) — Gordon — SOPS — hermes-ops only (read-only GitHub MCP server, R13).
 - Telegram alerts bot token (send-only) plus Gordon’s chat ID — Gordon, who sends the bot /start once — SOPS — observability (Gatus, Grafana).
 - Home location (rounded to 2 decimals, ~1 km) and Gordon’s contact email for the geo User-Agent — Gordon — SOPS env value — hermes-ops only; personal data, not a key.
 - Custody and rotation: the age key is the only offline secret, in two copies (password manager plus USB or paper), and is on the bastion only during bootstrap runs. The Hermes xAI logins live on each deploy’s volume; after a restore, Gordon redoes the device login if the token is stale. Keys do not expire by default: rotate one on a suspected leak, and a bot’s Telegram token when the bot is retired (R19). The only scheduled expiry is the internal CA root (10 years; Gordon keeps a calendar reminder a month before). The Google refresh token does not expire because the OAuth app is In production; a Google password change or six months unused still revokes it, so Gordon re-runs make google-consent if the brief reports invalid_grant.
@@ -550,7 +551,7 @@ Not built in this plan. Core builds only the named seam. Format: item — seam n
 - Local read-only Git mirror — Flux source — offline rebuilds wanted.
 - LLM tracing (Langfuse, hermes_otel) — Hermes analytics meanwhile — more RAM or a cost puzzle.
 - Postgres (CloudNativePG) — none; Hermes uses SQLite — a component needs it.
-- Private repos — R25 keeps them ready; while repos are public the ops deploy holds no GitHub credential, and only once they go private does ops get a read-only GitHub token for the PR read skill, jarvis is set to let jarvis-apps call its reusable workflows (R42), and Flux gets read-only deploy keys and a pull secret (R25); free GitHub enforces branch protection, and so admin-gate, only on public repos, so going private needs GitHub Pro or accepting an unenforced gate; handle later — Gordon decides.
+- Private repos — R25 keeps them ready; while repos are public the ops deploy holds only the no-repos public-read-only GitHub token (R13), and only once they go private is that token widened to read-only on the private repos for the PR read skill, jarvis is set to let jarvis-apps call its reusable workflows (R42), and Flux gets read-only deploy keys and a pull secret (R25); free GitHub enforces branch protection, and so admin-gate, only on public repos, so going private needs GitHub Pro or accepting an unenforced gate; handle later — Gordon decides.
 - promptfoo — swap boundary in §4 — a stated need.
 
 ## 10. Open questions and risks
@@ -563,7 +564,7 @@ OQ2. Closed 2026-10-19, approved by Gordon: Gordon is the only user at launch (�
 
 OQ3. Closed 2026-10-19, approved by Gordon: the initial build runs on a separate spare compute node (env-01); the previous system is not shut down or destroyed, and all work on it is frozen from 2026-10-19; only the env-01 node is wiped (§8).
 
-OQ4. Closed 2026-10-19, approved by Gordon: homelab proposes fixes only as chat messages (what is wrong, a likely cause, a suggested fix) and never files issues; the ops deploy holds no GitHub credential (R13, R15); spec-writer creates issues in jarvis-apps through the code-factory GitHub App, without code-factory:ready.
+OQ4. Closed 2026-10-19, approved by Gordon: homelab proposes fixes only as chat messages (what is wrong, a likely cause, a suggested fix) and never files issues; the ops deploy holds no GitHub credential (R13, R15); spec-writer creates issues in jarvis-apps through the code-factory GitHub App, without code-factory:ready. (amended 2026-10-19: ops now holds the no-repos public-read-only token, R13)
 
 OQ5. Closed 2026-10-19, approved by Gordon: start minimal; concierge is the only Telegram-facing bot at first, and more are added once proven in practice (R21). Bot tier map: inbox reply drafting and homelab chat replies run on mid (R23).
 
@@ -647,7 +648,7 @@ Tag: (phase, bot, read / draft / memory / reminder / refuse / later).
 - “Remind me to take out the trash tomorrow.” (P2, concierge, reminder)
 - “What did I ask you to remember about the <trip>?” “Forget that.” (P2, concierge, memory)
 - “Anything wrong with the cluster today?” “Which service uses the most memory?” “What changed this week?” (P2, homelab, read; proposes a fix in chat, never files or applies it)
-- Unprompted: “The Renovate PR bumping Grafana keeps failing CI: <error>. Suggested fix: <fix>.” (P3, homelab, read; scheduled “watch for stuck updates” check on the public repos, no credential; lands in homelab’s dashboard session and as a “stuck updates” line in concierge’s morning brief)
+- Unprompted: “The Renovate PR bumping Grafana keeps failing CI: <error>. Suggested fix: <fix>.” (P3, homelab, read; scheduled “watch for stuck updates” check on the public repos with the no-repos public-read-only token; lands in homelab’s dashboard session and as a “stuck updates” line in concierge’s morning brief)
 - “What PRs need my attention?” (P3, concierge, read)
 - “What did the code-factory finish overnight?” (P4b, concierge, read)
 - “Turn this idea into a code-factory issue.” (P4b, spec-writer, draft: files the issue after Gordon confirms, without code-factory:ready; Gordon labels it)
