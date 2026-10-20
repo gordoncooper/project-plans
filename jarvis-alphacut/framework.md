@@ -598,11 +598,29 @@ OQ10. Closed 2026-10-19, approved by Gordon: node OS = Ubuntu 26.04 Server, mini
 
 - Plan: Cursor writes jarvis-alphacut/plan.md in project-plans, one section per checkpoint (P0a, P0b, P1, P2, P3, P4a, P4b, as outlined in §2), with every task in the brief template; Gordon merges it, and coding agents build from the merged plan.
 - Must require: every plan task written in the coding-agent brief template (goal, why, hard limits, done checks, timebox), and a single list of Gordon-only actions (§8).
+- Brief template: the core above is required. Also add an ID, depends-on (task IDs) and a short “touches” (rough area or paths; a best guess is fine). These are guidance, not rigid fields.
+- Traceability: each task cites the exit check(s) it advances.
 - Each checkpoint: the §5 contracts tagged with it are written first as CONTRACT.md with “proven by”; its exit checks stay verbatim, with [G] kept; done = attached make verify PHASE=<checkpoint> output. Rules are cited by surviving number.
 - Task size: each task fits one PR and one timebox (Cursor sets it; split anything over ~1 day).
 - Fix order for repeated agent mistakes: fix it in the code first (clear boundaries, typed contracts, make the easy path the right path), then in automated checks (lint, tests, CI), then in prose (AGENTS.md, only for what can’t be enforced), and use human review last. Most effort goes at the top, least at the bottom.
-- Conflicts and gaps: a contradiction in this framework, or a rule that blocks an exit check, means stop and ask Gordon. Where the framework is silent, choose the simplest option that fits the rules and §4, record it in jarvis-alphacut/decisions.md (by PR; Gordon merges) as “default, not yet accepted”, and list it in §10 Open questions.
+- Build on this framework and the §4 stack; don’t import picks from earlier systems. Anything new the plan needs beyond §4 is fine, recorded as a default (next point).
+- Conflicts and gaps: a contradiction in this framework, or a rule that blocks an exit check, means stop and ask Gordon: list it under “Stop and ask” at the top of plan.md, and still deliver the rest of the plan in the PR. Where the framework is silent, choose the simplest option that fits the rules and §4, record it in jarvis-alphacut/decisions.md (by PR; Gordon merges) as “default, not yet accepted”, and list it in §10 Open questions.
+- Plan done: every exit check is covered by at least one task, every Gordon-only action is tied to the task that needs it, and every §5 contract has a task.
 - Done when: Gordon merges this framework, every open question is decided or has an accepted default, and Cursor can derive a phased plan with tasks and verification steps from it alone.
+
+Example task (placeholders only):
+
+```text
+ID:          <checkpoint>-<nn>
+Goal:        <one outcome, in a sentence>
+Why:         <the need it serves; cite R<n>>
+Advances:    <checkpoint> exit check: “<check text, verbatim>”
+Depends on:  <task IDs, or none>
+Touches:     <rough area or paths, best guess>
+Hard limits: <rules and boundaries it must not cross>
+Done checks: <commands or tests that pass; make verify PHASE=<checkpoint>>
+Timebox:     <hours, ≤ ~1 day>
+```
 
 ## Appendix — Eval seeds
 
