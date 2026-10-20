@@ -23,7 +23,7 @@ One list, from §8. Each action names the task that waits on it.
 - P0: install Renovate. Task: p0a-15.
 - P0: run make bootstrap-secrets on the bastion and commit its output. Task: p0a-04.
 - P0: wipe the env-01 node (a separate spare compute node; never a node of the previous system). Task: p0a-12.
-- P0: fresh-install Ubuntu 26.04 Server (minimal install) with Gordon’s SSH key and create user admin (D34). Task: p0a-12.
+- P0: fresh-install Ubuntu 26.04 Server (minimal install) with Gordon’s SSH key on the env’s SSH user (ssh_user, default ubuntu; D34). Task: p0a-12.
 - P0: set a DHCP reservation. Task: p0a-12.
 - P0: run the first site.yml from the bastion. Task: p0a-14.
 - P0: once JARVIS DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
@@ -73,8 +73,8 @@ Why:         P0a is env values before any manifest (R3, R4). The contract is wri
 Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
 Depends on:  none
 Touches:     docs/CONTRACT.template.md, services/hermes/core/schema/CONTRACT.md
-Hard limits: R3; R4; R23 (tiers and model names only under envs/). Allowed code_delivery is github and allowed build_agent is cursor (§5). The time zone is part of the env schema. env-01 runs on America/Los_Angeles, and the node and the Hermes schedules both use it. Gordon creates jarvis and jarvis-apps under gordoncooper before this PR writes to jarvis (D1). D7. Profile schema is a later section of this file (p2-04).
-Done checks: The file has offers, expects, health, config, and proven by, and the schema includes the time zone. One PR.
+Hard limits: R3; R4; R23 (tiers and model names only under envs/). Allowed code_delivery is github and allowed build_agent is cursor (§5). The time zone is part of the env schema. env-01 runs on America/Los_Angeles, and the node and the Hermes schedules both use it. The schema includes ssh_user, the node SSH login, default ubuntu (D34). Gordon creates jarvis and jarvis-apps under gordoncooper before this PR writes to jarvis (D1). D7. Profile schema is a later section of this file (p2-04).
+Done checks: The file has offers, expects, health, config, and proven by, and the schema includes the time zone and ssh_user. One PR.
 Timebox:     4h
 Proven by:   Env schema validation in CI, and the P0a seeded unknown code_delivery or build_agent value.
 ```
@@ -137,8 +137,8 @@ Why:         Fix order (§11): the schema is the boundary; CI only runs it. This
 Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
 Depends on:  p0a-01, p0a-03, p0a-06
 Touches:     services/hermes/core/schema/, tools/checks/env-schema
-Hard limits: R3; R4; R10 (Python). Validates cluster-vars.yaml, hermes.yaml, apps.yaml, and inventory/hosts.yml (§5). Gordon sets branch protection requiring ci after p0a-06 merges, before the seeded PR. Unknown code_delivery or build_agent fails. Core naming an env, a model, or a DNS suffix is p0a-07.
-Done checks: pytest covers a valid env-01 and a bad build_agent. A seeded PR that sets code_delivery to a value other than github fails ci. One PR.
+Hard limits: R3; R4; R10 (Python). Validates cluster-vars.yaml, hermes.yaml, apps.yaml, and inventory/hosts.yml (§5). Gordon sets branch protection requiring ci after p0a-06 merges, before the seeded PR. Unknown code_delivery or build_agent fails. A missing ssh_user means ubuntu (D34). Core naming an env, a model, or a DNS suffix is p0a-07.
+Done checks: pytest covers a valid env-01, a bad build_agent, and ssh_user defaulting to ubuntu. A seeded PR that sets code_delivery to a value other than github fails ci. One PR.
 Timebox:     6h
 ```
 
@@ -210,7 +210,7 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0a-11
 Touches:     infra/ansible/roles/k3s, envs/env-01/values/cluster-vars.yaml
-Hard limits: R1; §7 (kube and system reserves about 1 GB each, eviction thresholds); R28; R31; R33. D2; D3; D4; D5; D6; D34. The k3s version is pinned in cluster-vars.yaml and changes only by PR. Renovate does not manage it. Ansible logs in as admin (D34). site.yml refuses a host that already runs k3s unless /etc/jarvis/env=env-01. The first run writes that marker. kubeconfig is written for both bastion users. The node is the spare env-01 box, wiped and freshly installed by Gordon before this role runs.
+Hard limits: R1; §7 (kube and system reserves about 1 GB each, eviction thresholds); R28; R31; R33. D2; D3; D4; D5; D6; D34. The k3s version is pinned in cluster-vars.yaml and changes only by PR. Renovate does not manage it. Ansible logs in as ssh_user and runs every task as root with become (D34). site.yml refuses a host that already runs k3s unless /etc/jarvis/env=env-01. The first run writes that marker. kubeconfig is written for both bastion users. The node is the spare env-01 box, wiped and freshly installed by Gordon before this role runs.
 Done checks: A local render of config.yaml contains --cluster-init, secrets encryption, the CIDRs, the snapshot directory, and no INSTALL_K3S_* variable. One PR.
 Timebox:     8h
 ```
@@ -222,7 +222,7 @@ Why:         The age key and the first Flux apply are the bootstrap bridge (R1, 
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-12, p0a-04
 Touches:     infra/ansible/roles/flux-operator, infra/ansible/site.yml
-Hard limits: R1; R25. The private age key is applied once as flux-system/sops-age, which Flux never reconciles. site.yml is run by the node SSH user admin (D34), not the agent user.
+Hard limits: R1; R25. The private age key is applied once as flux-system/sops-age, which Flux never reconciles. Gordon’s bastion user runs site.yml, not the agent user. site.yml sets ansible_user from cluster-vars ssh_user, default ubuntu, and become: true (D34).
 Done checks: site.yml contains the three roles in §8 order (base-os, k3s, flux-operator) and is idempotent in check mode against a fixture. One PR.
 Timebox:     6h
 ```
