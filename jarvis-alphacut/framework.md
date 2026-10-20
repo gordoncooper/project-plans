@@ -27,7 +27,7 @@ Conflict rule: a contradiction in this framework, or a rule that blocks an exit 
 ### Starter bots
 
 - concierge (ops): the front door and the only Telegram-facing bot (R21); owns the starter scheduled jobs: the morning brief, evening wrap and weekly review.
-- inbox (ops): email triage (summarizes and ranks email in chat, applies no Gmail labels) and reply drafts on request; never sends; fewest tools (R15).
+- inbox (ops): email triage (summarizes and ranks the unread inbox threads in chat only, applies no Gmail labels) and reply drafts on request; never sends; fewest tools (R15).
 - homelab (ops): reads the cluster, Flux and metrics, runs the scheduled “watch for stuck updates” check, and proposes fixes in chat only (R15).
 - foreman (code-factory): watches the code-factory queue and reports; never codes (R40).
 - spec-writer (code-factory): turns ideas into issues with acceptance criteria (R40).
@@ -68,7 +68,7 @@ Conflict rule: a contradiction in this framework, or a rule that blocks an exit 
 
 ## 2. Phases and exit checks
 
-Each phase ends with a working, checked system. Cursor may refine phases; the exit checks stay. Every check is provable by a command, URL or test output: agents run make verify PHASE=<phase> (tools/checks/) on the bastion and attach its output (R35). [G] marks a check only Gordon can verify (tailnet reachability, phone or Telegram delivery). Each phase’s “Gordon first” line points to that phase’s group in the §8 Gordon-only actions, which its briefs wait on. Every CI rule check is proven by a seeded bad PR that fails it.
+Each phase ends with a working, checked system. Cursor may refine phases; the exit checks stay. Every check is provable by a command, URL or test output: agents run make verify PHASE=<phase> (tools/checks/) on the bastion and attach its output (R35). [G] marks a check only Gordon can verify (tailnet reachability, phone or Telegram delivery). make verify prints NEEDS GORDON for each [G] check and Gordon-run step; the attached output includes his pasted result, and a missing paste fails. Each phase’s “Gordon first” line points to that phase’s group in the §8 Gordon-only actions, which its briefs wait on. Every CI rule check is proven by a seeded bad PR that fails it.
 
 ### P0 — Foundation
 
@@ -137,12 +137,12 @@ Done: make verify PHASE=p2 output attached.
 - A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.
 - Weather and distance questions get correct answers through the geo MCP server (weather: Open-Meteo; distance: Nominatim plus the OSRM demo, typical drive time) with attribution; the geo tool’s evals in concierge pass.
 - Memory: a fact is recalled after a pod restart in a new session; “forget that” is staged, and approving it removes the fact; a memory export produces a file. Memory and skill writes (R12) wait for approval; a test approves one and rejects one.
-- Each bot’s evals (≥3) pass against the deployed bots (make verify, R38); usage is readable in Hermes analytics and the grok.com dashboard; with the subscription login revoked or its limit reached, the dashboard and Telegram show an error within ~30 s and make verify fails (R18).
+- Each bot’s evals (≥3) pass against the deployed bots (make verify, R38); usage is readable in Hermes analytics and the grok.com dashboard [G]; with the subscription login revoked or capped (a 401 test fixture stands in; the real login stays signed in), the dashboard and Telegram show an error within ~30 s and make verify fails (R18).
 - With the primary model blocked, chat answers from the fallback model; with the provider blocked, the dashboard and Telegram show an error within 30 s and Gatus flags it (R18).
 - A test Hermes bump PR shows auto-merge is off, its deploy waited for the digest-keyed pre-upgrade backup, and the evals then ran against the deployed bot (R33).
 - The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).
 - After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.
-- Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved was added by a bot or App account, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).
+- Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).
 
 ### P3 — Daily butler
 
@@ -157,7 +157,7 @@ Contracts first (§5): none new (Skill contract from P2).
 Done: make verify PHASE=p3 output attached.
 
 - The morning brief arrives at its scheduled time with calendar, email and weather (Open-Meteo, attributed; “weather unavailable” if it is down), and reaches Telegram [G].
-- The evening wrap arrives at its scheduled time with the day’s unanswered email ranked by importance and tomorrow’s calendar, and reaches Telegram [G].
+- The evening wrap arrives at its scheduled time with the day’s unread inbox threads, ranked by importance in chat only, and tomorrow’s calendar, and reaches Telegram [G].
 - The weekly review arrives at its scheduled time with the past week’s calendar and email highlights and the coming week’s calendar, and reaches Telegram [G].
 - homelab’s scheduled “watch for stuck updates” check reads Renovate PRs and their check runs and annotations from the public repos (no credential; CI reports each failure as an ::error annotation): a seeded Renovate PR whose required check failed on its last 2 runs, or that has been open more than 7 days, produces one finding with the error and a suggested fix in homelab’s dashboard session, and the next morning brief carries a “stuck updates” line pointing to it.
 - Each read skill is covered by an eval in its bot’s evals/.
@@ -196,6 +196,7 @@ Done: make verify PHASE=p4b output attached.
 
 - A toy code-factory:ready issue becomes a draft PR in jarvis-apps with a green CI check and a checker check run (pass or fail with notes) from a different model family.
 - A seeded code-factory:ready label added by the App, not by Gordon’s account, is ignored, the workflow comments why, and foreman reports it (R40).
+- The code-factory App adding admin-approved fails admin-gate.
 - spec-writer turns an idea into an issue with acceptance criteria and without code-factory:ready; a failing checker verdict keeps the PR a draft and sends it back through the fix loop until the fix cap (R40).
 - Config validation fails when the builder and checker are from the same model family (seeded test, R41).
 - Token scopes show no agent holds push credentials and the code-factory cannot write to jarvis.
@@ -281,7 +282,7 @@ R31. Backups. Prefer stateless services. Every PVC has a VolSync backup entry or
 
 R32 — merged into R31 (backups).
 
-R33. Upgrades: images are pinned by digest and upgraded by Renovate PRs. Minor and patch updates auto-merge after ~3 days with CI green (protected paths per R36); majors are human-reviewed. Hermes bumps never auto-merge; Gordon merges them. Each deploy overlay pins its own Hermes digest, so there is one PR per deploy, code-factory first, adopted after a ~3–5 day soak from the upstream release, and the ops PR follows after a 24 h watch. Evals run after each deploy (R38); the pre-upgrade backup runs in-cluster: the deploy’s Flux Kustomization depends on a VolSync backup manually triggered by the new digest and waits until it completes. Why: Hermes ships weekly and breaks; SQLite sessions can corrupt. Enforced by: CI digest check; Renovate config; P2 exit check.
+R33. Upgrades: images are pinned by digest and upgraded by Renovate PRs. k3s is pinned in cluster-vars.yaml and changes only by PR; Renovate does not manage it. Minor and patch updates auto-merge after ~3 days with CI green (protected paths per R36); majors are human-reviewed. Hermes bumps never auto-merge; Gordon merges them. Each deploy overlay pins its own Hermes digest, so there is one PR per deploy, code-factory first, adopted after a ~3–5 day soak from the upstream release, and the ops PR follows after a 24 h watch. Evals run after each deploy (R38); the pre-upgrade backup runs in-cluster: the deploy’s Flux Kustomization depends on a VolSync backup manually triggered by the new digest and waits until it completes. Why: Hermes ships weekly and breaks; SQLite sessions can corrupt. Enforced by: CI digest check; Renovate config; P2 exit check.
 
 ### Build, deploy and gates
 
@@ -299,7 +300,7 @@ R39. Rulebooks: one for coding agents (rulebooks/coding-agents.md); each bot’s
 
 ### Code-factory
 
-R40. The code-factory targets only jarvis-apps at first, never jarvis. The loop runs in the code delivery provider’s CI (GitHub Actions): a code-factory:ready label added by Gordon’s account starts one lane run at a time (concurrency queue), with a fix cap; a label from any other actor is ignored with a comment. foreman watches and reports and never codes. spec-writer turns ideas into issues with acceptance criteria and never adds code-factory:ready. Gordon approves twice: the code-factory:ready label and the merge. A run that times out gets code-factory:failed, and foreman reports it. Credentials: §8. Why: humans gate intent and result, not steps; core stays human-built. Enforced by: the workflow’s label-actor condition (seeded test in P4b); GitHub App installed on jarvis-apps only; the admin-gate check (R36).
+R40. The code-factory targets only jarvis-apps at first, never jarvis. The loop runs in the code delivery provider’s CI (GitHub Actions): a code-factory:ready label added by Gordon’s account starts one lane run at a time (concurrency queue), with a fix cap; a label from any other actor is ignored with a comment. foreman watches and reports and never codes. spec-writer turns ideas into issues with acceptance criteria and never adds code-factory:ready. Gordon approves twice: the code-factory:ready label and the merge. A run that times out or hits the fix cap gets code-factory:failed, and foreman reports it. Credentials: §8. Why: humans gate intent and result, not steps; core stays human-built. Enforced by: the workflow’s label-actor condition (seeded test in P4b); GitHub App installed on jarvis-apps only; the admin-gate check (R36).
 
 R41. Builder: Composer through the headless Cursor CLI. Issues labeled code-factory:hard use Claude through Cursor. Checker: Grok through the Cursor CLI in read-only (ask) mode; it reads the diff and the acceptance criteria and returns pass or fail with notes. Checker family always differs from builder family. Why: independent review. Enforced by: config validation fails if the families match.
 
@@ -322,6 +323,7 @@ Format: tool — role — swap boundary.
 - Kustomize (Helm only to consume upstream charts, via Flux HelmRelease) — manifests and env overlays — Kustomize bases and patches.
 - GitHub — the code delivery provider (§5): Git hosting, PRs, issues — Git remote and API.
 - GitHub Actions on GitHub-hosted runners — CI and the first code-factory sandbox — workflows and the sandbox interface.
+- gitleaks (pinned CLI) — CI secret scan (R25) — ci rule check.
 - GHCR (GitHub Container Registry) — registry for images built by CI (jarvis-apps apps as public packages, any excepted custom image); upstream images are pulled from their own registries, all pinned by digest — OCI registry.
 - Renovate (hosted GitHub App) — dependency and image upgrades as PRs — config in the repo.
 - Traefik (bundled with k3s, tuned by HelmChartConfig) with plain Kubernetes Ingress; the wildcard is served through Traefik’s default TLSStore (OQ8) — routing — Ingress.
@@ -335,9 +337,10 @@ Format: tool — role — swap boundary.
 ### Services
 
 - Hermes (core as defined in §1) — agent runtime with memory and skills — assistant API and MCP.
-- MCP servers and SKILL.md skills — tools and procedures, read-only first (Example: kubernetes-mcp-server read-only); third-party servers are pinned to exact versions with their npm/uv cache on the deploy volume, so pods do not download them at every start — MCP, SKILL.md.
+- MCP servers and SKILL.md skills — tools and procedures, read-only first (Example: kubernetes-mcp-server read-only); third-party servers are pinned to exact versions with their npm/uv cache, or a pinned upstream release binary (Example: mcp-victoriametrics), on the deploy volume, so pods do not download them at every start — MCP, SKILL.md.
 - geo MCP server (in-repo, Python, read-only) — weather via Open-Meteo, distance via Nominatim plus the OSRM public demo, all keyless — MCP.
 - VictoriaMetrics and VictoriaLogs, single-node — metric and log storage with retention — Prometheus query API, LogsQL.
+- mcp-victoriametrics (official, read-only, pinned binary on the deploy volume) — homelab metric reads — MCP.
 - Fluent Bit (DaemonSet) — log shipper: container and node logs to VictoriaLogs — stdout logs.
 - vmagent with node-exporter and kube-state-metrics — metric collection: node, Kubernetes-object and /metrics targets to VictoriaMetrics — Prometheus exporters and scrape config.
 - Grafana — dashboards and Grafana-managed metric and log alerts to Telegram — data sources and alert rules in Git.
@@ -373,7 +376,7 @@ Each gets a CONTRACT.md from one template: offers, expects, health, config, prov
 - Assistant API (P2, per deploy) — on the deploy’s hostname (hermes-ops or hermes-code-factory): the dashboard at /, and each profile’s OpenAI-compatible API at /api/<profile>/v1, routed by path to that profile’s port; behind the deploy’s Hermes API key; the dashboard uses its own login (R27). Session history, including briefs, is readable through it; memory export produces a file (R17); /v1/audio/* paths are reserved and not built (the voice seam). The seam for any later UI. Proven by: the P2 scripted-prompt and memory-export checks.
 - Skill contract (P2) — MCP servers (pinned) and SKILL.md. MCP servers run as pinned processes inside the deploy’s pod (no sidecars); each tool is tagged read or write in the profile’s toolsets; write tools run only behind a confirm step (R15); this plan ships read tools plus inbox drafts. The in-repo geo server (services/hermes/core/skills/geo/) runs on the Hermes image’s Python and keeps to the providers’ usage policies: at most 1 request per second to Nominatim and OSRM, cached results, a User-Agent with Gordon’s contact email, and attribution in answers (Open-Meteo; OSRM, © OpenStreetMap contributors). Home is a rounded SOPS value and is never looked up; only the destination is sent. Its CONTRACT.md records the deliberate decision Nominatim’s policy asks for. Proven by: the R16 pin and tag check, the R13 toolset policy check and the P3 no-write eval.
 - Profile schema (P2) — profile.yaml: job, toolsets with reasons and read/write tags, cron, evals, telegram: true/false (allow-list required when true, R21); bot names that collide with the dashboard’s own /api/ paths (status, cron, memory, skills) are rejected (tiers come from the env’s bot tier map, R23); validated in CI.
-- Env schema (P0) — what an env may set: role labels and node list, sizes, enabled features, bots, enabled cron, bot tier map and tier-to-model map, backup target and retention, DNS suffix (env-01: alpha.lan), app hosting on or off and the enabled apps, the code delivery provider (github only), the build agent (cursor only); validates values/cluster-vars.yaml, values/hermes.yaml, values/apps.yaml and inventory/hosts.yml in CI.
+- Env schema (P0) — what an env may set: role labels and node list, sizes, enabled features, bots, enabled cron, time zone, bot tier map and tier-to-model map, backup target and retention, DNS suffix (env-01: alpha.lan), app hosting on or off and the enabled apps, the code delivery provider (github only), the build agent (cursor only); validates values/cluster-vars.yaml, values/hermes.yaml, values/apps.yaml and inventory/hosts.yml in CI.
 - Login (P1, P2) — each UI’s built-in login (R27); bootstrap-secrets creates the Grafana admin password and each Hermes dashboard’s password hash and signing secret. Dashboard and Grafana logins work offline (R18). Multi-user seam: a second user adds one OIDC issuer for the UIs’ native OIDC (§9). Proven by: the R27 CI check and the P2 dashboard-login check.
 - Exposure (P0) — a component gets <svc>.${DNS_SUFFIX} by adding one Ingress (OQ8). JARVIS DNS answers the name automatically, the wildcard cert covers it (R28), and the component adds its own Gatus check (R5). Gatus resolves the env’s zone through cluster DNS (k3s coredns-custom forwards it to JARVIS DNS) and trusts the internal CA’s public root cert, committed in plain text, so its HTTPS checks see what a browser sees. Proven by: the R5 lint and the P0b, P2 and P4a reachability checks.
 - Backups (P0) — each PVC either uses the shared VolSync component from platform/backups/ (a ReplicationSource with an on-demand trigger, which make hermes-backup uses) or is marked backup: none (rebuildable) (R31). The target path, retention and weekly prune come from cluster-vars.yaml. Restore is a ReplicationDestination with a written procedure. Proven by: the R31 CI check and the P0b and P2 restore drills.
@@ -456,6 +459,8 @@ jarvis-apps/
 
 ## 7. env-01 defaults and budget
 
+- Schedules (env-01, America/Los_Angeles): stuck-updates 06:30, morning brief 07:00, evening wrap 18:00, weekly review Mon 07:30. Stuck-updates runs first so the brief carries its line.
+- Lane limits (env-01): 30-minute run timeout; fix cap 2 runs (first try plus one fix).
 - Bot tier map (env-01; R23): mid = concierge, inbox reply drafting and homelab chat replies; cheap = cron jobs, inbox triage, homelab checks, foreman reports and spec-writer drafts; frontier = on demand only. Hermes does not run coding agents: code-factory:hard is a Cursor lane setting in the Actions lane job, not a Hermes tier. Lane models (builder Composer 2.5, checker Grok 4.7, code-factory:hard builder Claude, all through Cursor) and their families are set in hermes.yaml (R23, R41).
 - RAM targets: OS and k3s ~2 GB; platform including Flux ~2 GB; observability ~2 GB; Hermes ops 2–3 GB; Hermes code-factory 1–2 GB; hosted apps all together ≤4 GB; total ~13–15 GB; keep ≥30% free. No coding-sandbox RAM while the sandbox is GitHub Actions. CPU floor: 4 cores.
 - RAM enforcement: every container sets a memory request and limit and a CPU request, no CPU limit (R5); Ansible sets kubelet system and kube reserves (~1 GB each) and eviction thresholds; app sizes map to quotas (small = 512 Mi and 0.5 CPU, medium = 2 Gi and 1 CPU); a Grafana alert fires when node memory use passes 70%.
@@ -488,10 +493,10 @@ Format: item — created by — stored in — used by. SOPS files are envs/<env>
 ### Gordon-only actions
 
 - Before P0: only Gordon merges in project-plans (gordon5417-ai may open PRs); merge jarvis-alphacut/framework.md, then jarvis-alphacut/plan.md (§11); archive the previous system’s repos read-only. Every token, key and webhook for the new build is new; none is reused.
-- P0: create the two repos and branch protection requiring the ci check; invite gordon5417-ai (write) to jarvis and jarvis-apps only, accept the two invites signed in as gordon5417-ai, and set up the bastion’s agent user with a Cursor login and the gordon5417-ai token, which Gordon creates signed in as gordon5417-ai and pastes onto the bastion; generate the age key, install Renovate; run make bootstrap-secrets on the bastion and commit its output; wipe the env-01 node (a separate spare compute node; never a node of the previous system), fresh-install Ubuntu 26.04 Server (minimal install) with Gordon’s SSH key, set a DHCP reservation and run the first site.yml from the bastion; once JARVIS DNS and the CA exist, set router forwarding of alpha.lan and trust the root cert on each device.
+- P0: create the two repos under gordoncooper (the account that adds admin-approved) and branch protection requiring the ci check; invite gordon5417-ai (write) to jarvis and jarvis-apps only, accept the two invites signed in as gordon5417-ai, and set up the bastion’s agent user with a Cursor login and the gordon5417-ai token, which Gordon creates signed in as gordon5417-ai and pastes onto the bastion; generate the age key, install Renovate; run make bootstrap-secrets on the bastion and commit its output; wipe the env-01 node (a separate spare compute node; never a node of the previous system), fresh-install Ubuntu 26.04 Server (minimal install) with Gordon’s SSH key, set a DHCP reservation and run the first site.yml from the bastion; once JARVIS DNS and the CA exist, set router forwarding of alpha.lan and trust the root cert on each device.
 - P1: create the send-only alerts bot with BotFather, send it /start once and record his chat ID.
 - P2: create concierge’s Telegram token and record Gordon’s user ID (the chat ID from P1) for concierge’s allow-list; approve the ops deploy’s xAI device login; at the exit, create the admin-approved label and add admin-gate to branch protection on jarvis and jarvis-apps.
-- P3: publish the Google OAuth app as In production and run make google-consent.
+- P3: publish the Google OAuth app as In production and run make google-consent, then send himself one email with subject jarvis-p3-seed (the draft check’s seed; the bot never sends).
 - P4: approve the code-factory deploy’s xAI device login; create the Cursor user API key and set Cursor billing to auto top-up off with a monthly limit (on the plan tier that includes Claude for code-factory:hard); create the GitHub App by hand from its four-permission checklist (contents, pull requests, issues, checks; no manifest flow); for P4a, merge the app’s line in envs/<env>/values/apps.yaml and set its GHCR package to public on first publish; for P4b, apply code-factory:ready and merge code-factory PRs.
 - Standing: own router-side access (external dependency: Tailscale runs on the router and advertises a route to the LAN; the router handles LAN and tailnet DNS; nothing for it is installed or configured on the nodes); verify the [G] exit checks (§2); review PRs held by admin-gate and add admin-approved from his own account; merge Hermes bump PRs (R33); re-run site.yml after merging an infra/ PR; reboot the node after kernel security updates; keep the previous system frozen (no new work, but not shut down, wiped or destroyed).
 
