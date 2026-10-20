@@ -165,7 +165,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 - Decision: unanswered email means unread threads in the inbox. Rank is the cheap-tier model’s importance order. The rank is shown in chat and is not written to Gmail.
 - Reason: the wrap and the inbox triage need a ranking, and no ranking rule is given (R15).
-- Where: `p3-01`, `p3-03`.
+- Where: `p3-01a`, `p3-03`.
 - Status: default, not yet accepted.
 
 ## D23
@@ -179,7 +179,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 - Decision: during `make google-consent`, Gordon sends one message to himself with subject `jarvis-p3-seed`. The draft check uses that thread.
 - Reason: the draft check needs a seeded thread. The Gmail token is read plus drafts, and the bot must not send (R15).
-- Where: `p3-06`, Gordon action for `p3-01`.
+- Where: `p3-06`, Gordon action for `p3-01a`.
 - Status: default, not yet accepted.
 
 ## D25
@@ -200,7 +200,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 - Decision: the lane timeout default is 30 minutes. The timeout seed passes a 1-minute timeout.
 - Reason: R42 requires a time limit and sets none. The seed must finish inside a verify run.
-- Where: `p4b-06`, `p4b-14`.
+- Where: `p4b-06a`, `p4b-14`.
 - Status: default, not yet accepted.
 
 ## D28
@@ -254,9 +254,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D35
 
-- Decision: `jarvis-apps` gets a green `ci` workflow in P0a so branch protection has a check to report. P4a extends that same workflow with the image build, the namespaced-object check, and the admin-gate caller.
-- Reason: P0 requires branch protection with check `ci` on both repos, and jarvis-apps otherwise has no workflow until P4a.
-- Where: `p0a-06`, `p4a-04`, `p4a-05`.
+- Decision: jarvis-apps gets a green ci workflow in P0a so branch protection has a check to report. p2-24 makes that workflow call admin-gate. P4a adds the image build and the namespaced-object check to the same workflow.
+- Reason: P0 requires branch protection with check `ci` on both repos. The workflow starts green in P0a, calls admin-gate at P2, and gains the image build and the namespaced-object check in P4a.
+- Where: `p0a-06`, `p2-24`, `p4a-04`, `p4a-05`.
 - Status: default, not yet accepted.
 
 ## D36
@@ -270,12 +270,12 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 - Decision: foreman stores the last reported GitHub `updated` time on its volume and skips the model call when the public issue and PR list is unchanged.
 - Reason: R40 requires the skip and does not say how to detect “nothing changed”.
-- Where: `p4b-09`.
+- Where: `p4b-09b`.
 - Status: default, not yet accepted.
 
 ## D38
 
 - Decision: admin-gate’s bot and App actor cases are proven by a fixture event (actor type Bot, and actor type App) run in CI against the same function the workflow calls. The live PR proves a label from `gordon5417-ai` fails, and a label Gordon’s own account adds after the latest commit passes.
 - Reason: the P2 check requires a bot or App actor, and the code-factory App is created at P4 (§8).
-- Where: `p2-23`.
+- Where: p2-24. The live App label is repeated at p4b-10.
 - Status: default, not yet accepted.

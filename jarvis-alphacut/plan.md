@@ -4,7 +4,7 @@ Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves op
 
 ## Stop and ask
 
-- OQ9. §10 says the open questions are all closed, and OQ9’s own text says it was not marked approved by Gordon and to confirm. §4 already records the logs and metrics path (Fluent Bit to VictoriaLogs, vmagent plus node-exporter plus kube-state-metrics to VictoriaMetrics, Grafana, no fallbacks). This plan follows §4, so the P1 exit checks stay buildable. Confirm OQ9, or name a different stack.
+- None (OQ9 confirmed by Gordon 2026-10-19: §4 logs and metrics stack stands).
 
 ## Gordon-only actions
 
@@ -14,7 +14,8 @@ One list, from §8. Each action names the task that waits on it.
 - Before P0: merge jarvis-alphacut/framework.md, then jarvis-alphacut/plan.md (§11). Task: p0a-01.
 - Before P0: archive the previous system’s repos read-only. Task: p0a-01.
 - Before P0: every token, key and webhook for the new build is new; none is reused. Task: p0a-01.
-- P0: create the two repos and branch protection requiring the ci check (D1). Task: p0a-06.
+- P0: create the two repos (D1). Task: p0a-03.
+- P0: branch protection requiring the ci check. Task: p0a-06.
 - P0: invite gordon5417-ai (write) to jarvis and jarvis-apps only. Task: p0a-03.
 - P0: accept the two invites signed in as gordon5417-ai. Task: p0a-03.
 - P0: set up the bastion’s agent user with a Cursor login and the gordon5417-ai token, which Gordon creates signed in as gordon5417-ai and pastes onto the bastion. Task: p0a-03.
@@ -25,8 +26,8 @@ One list, from §8. Each action names the task that waits on it.
 - P0: fresh-install Ubuntu 26.04 Server (minimal install) with Gordon’s SSH key. Task: p0a-12.
 - P0: set a DHCP reservation. Task: p0a-12.
 - P0: run the first site.yml from the bastion. Task: p0a-14.
-- P0: once JARVIS DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-11.
-- P0: trust the root cert on each device. Task: p0b-11.
+- P0: once JARVIS DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
+- P0: trust the root cert on each device. Task: p0b-08.
 - P1: create the send-only alerts bot with BotFather. Task: p1-09.
 - P1: send it /start once and record his chat ID. Task: p1-09.
 - P2: create concierge’s Telegram token. Task: p2-15.
@@ -34,12 +35,12 @@ One list, from §8. Each action names the task that waits on it.
 - P2: approve the ops deploy’s xAI device login. Task: p2-13.
 - P2: at the exit, create the admin-approved label. Task: p2-24.
 - P2: add admin-gate to branch protection on jarvis and jarvis-apps. Task: p2-24.
-- P3: publish the Google OAuth app as In production. Task: p3-01.
-- P3: run make google-consent (and, with D24, send the jarvis-p3-seed message to himself). Task: p3-01.
+- P3: publish the Google OAuth app as In production. Task: p3-01a.
+- P3: run make google-consent (and, with D24, send the jarvis-p3-seed message to himself). Task: p3-01a.
 - P4: approve the code-factory deploy’s xAI device login. Task: p4b-05.
-- P4: create the Cursor user API key. Task: p4b-06.
-- P4: set Cursor billing to auto top-up off with a monthly limit (on the plan tier that includes Claude for code-factory:hard). Task: p4b-06.
-- P4: create the GitHub App by hand from its four-permission checklist (contents, pull requests, issues, checks; no manifest flow). Task: p4b-06.
+- P4: create the Cursor user API key. Task: p4b-06a.
+- P4: set Cursor billing to auto top-up off with a monthly limit (on the plan tier that includes Claude for code-factory:hard). Task: p4b-06a.
+- P4: create the GitHub App by hand from its four-permission checklist (contents, pull requests, issues, checks; no manifest flow). Task: p4b-06b.
 - P4a: merge the app’s line in envs/<env>/values/apps.yaml. Task: p4a-07.
 - P4a: set its GHCR package to public on first publish. Task: p4a-04.
 - P4b: apply code-factory:ready. Task: p4b-11.
@@ -114,18 +115,6 @@ Timebox:     6h
 ```
 
 ```text
-ID:          p0a-05
-Goal:        Implement the env schema validator and seed one PR with an unknown provider value.
-Why:         Fix order (§11): the schema is the boundary; CI only runs it. This is the code that makes the easy values the legal values (R4).
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
-Depends on:  p0a-01, p0a-03
-Touches:     services/hermes/core/schema/, tools/checks/env-schema
-Hard limits: R3; R4; R10 (Python). Validates cluster-vars.yaml, hermes.yaml, apps.yaml, and inventory/hosts.yml (§5). Unknown code_delivery or build_agent fails. Core naming an env, a model, or a DNS suffix is p0a-07.
-Done checks: pytest covers a valid env-01 and a bad build_agent. A seeded PR that sets code_delivery to a value other than github fails ci. One PR.
-Timebox:     6h
-```
-
-```text
 ID:          p0a-06
 Goal:        Add the required ci workflow, the secret scan, a seeded plaintext secret, and a green jarvis-apps ci.
 Why:         P0a’s required check is ci, and the secret scan is part of the first CI cut (§8 phase 0 order, R25).
@@ -134,6 +123,18 @@ Depends on:  p0a-03
 Touches:     jarvis/.github/workflows/ci.yml, tools/checks/secret-scan, jarvis-apps/.github/workflows/ci.yml
 Hard limits: R25; R36 (admin-gate is not part of ci; it joins at the P2 exit). Workflows that would hold secrets do not run on fork PRs. D1; D35.
 Done checks: ci runs every script in tools/checks/. A seeded PR with a plaintext secret fails the scan. jarvis-apps ci reports success on an empty tree. One PR.
+Timebox:     6h
+```
+
+```text
+ID:          p0a-05
+Goal:        Implement the env schema validator and seed one PR with an unknown provider value.
+Why:         Fix order (§11): the schema is the boundary; CI only runs it. This is the code that makes the easy values the legal values (R4).
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
+Depends on:  p0a-01, p0a-03, p0a-06
+Touches:     services/hermes/core/schema/, tools/checks/env-schema
+Hard limits: R3; R4; R10 (Python). Validates cluster-vars.yaml, hermes.yaml, apps.yaml, and inventory/hosts.yml (§5). Unknown code_delivery or build_agent fails. Core naming an env, a model, or a DNS suffix is p0a-07.
+Done checks: pytest covers a valid env-01 and a bad build_agent. A seeded PR that sets code_delivery to a value other than github fails ci. One PR.
 Timebox:     6h
 ```
 
@@ -205,7 +206,7 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0a-11
 Touches:     infra/ansible/roles/k3s, envs/env-01/values/cluster-vars.yaml
-Hard limits: R1; R5 (kube and system reserves about 1 GB each, eviction thresholds); R28; R31. D2; D3; D4; D5; D6; D34. site.yml refuses a host that already runs k3s unless /etc/jarvis/env=env-01. The first run writes that marker. kubeconfig is written for both bastion users. The node is the spare env-01 box, wiped and freshly installed by Gordon before this role runs.
+Hard limits: R1; §7 (kube and system reserves about 1 GB each, eviction thresholds); R28; R31. D2; D3; D4; D5; D6; D34. site.yml refuses a host that already runs k3s unless /etc/jarvis/env=env-01. The first run writes that marker. kubeconfig is written for both bastion users. The node is the spare env-01 box, wiped and freshly installed by Gordon before this role runs.
 Done checks: A local render of config.yaml contains --cluster-init, secrets encryption, the CIDRs, the snapshot directory, and no INSTALL_K3S_* variable. One PR.
 Timebox:     8h
 ```
@@ -339,7 +340,7 @@ Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suff
 Depends on:  p0b-01
 Touches:     platform/traefik/
 Hard limits: R1; R4; R5; R9; R30 waits for P4a. D30; D32. kube-system receives only this HelmChartConfig. No Gateway API. The placeholder ConfigMap on this path is removed (D9).
-Done checks: The HelmRelease is Ready, probes and memory limits are set, and no Gateway API object exists. One PR.
+Done checks: The HelmChartConfig is applied and Traefik is Ready, probes and memory limits are set, and no Gateway API object exists. One PR.
 Timebox:     6h
 ```
 
@@ -396,10 +397,10 @@ ID:          p0b-08
 Goal:        Deploy the test app and its Ingress, and prove HTTPS from the LAN.
 Why:         P0b’s reachability check needs one named HTTPS service on the internal CA (R28).
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
-Depends on:  p0b-04, p0b-05, p0b-06
+Depends on:  p0b-04, p0b-05, p0b-06, p0b-07
 Touches:     platform/testapp/
 Hard limits: R5; R28. D12. Hostname testapp.alpha.lan. The app is a platform fixture, not an app-<name> hosted app (that isolation is P4a, R30).
-Done checks: curl from the LAN to https://testapp.alpha.lan returns the known file and the cert chains to the internal CA. The tailnet half is NEEDS GORDON (D17). One PR.
+Done checks: Gordon sets router forwarding of alpha.lan and trusts the root cert on the bastion before the LAN curl. curl from the LAN to https://testapp.alpha.lan returns the known file and the cert chains to the internal CA. The tailnet half is NEEDS GORDON (D17). One PR.
 Timebox:     6h
 ```
 
@@ -435,7 +436,7 @@ Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suff
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0b-08, p0b-10, p0b-07
 Touches:     Makefile, tools/checks/verify-p0b.sh
-Hard limits: R28; R35. D17. Router forwarding of alpha.lan and trusting the root cert are Gordon’s, and they are NEEDS GORDON lines. Nothing for Tailscale is installed on the node.
+Hard limits: R28; R35. D17. Router forwarding of alpha.lan and the trusted root cert are already Gordon's steps on p0b-08. This verify re-checks LAN and collects the tailnet paste. Nothing for Tailscale is installed on the node.
 Done checks: make verify PHASE=p0b exits 0 with the LAN curl, the cert issuer, the restore checksum, and Gordon’s tailnet paste. One PR.
 Timebox:     4h
 ```
@@ -455,29 +456,17 @@ Goal: Gordon sees the system and gets alerts without Hermes.
 
 ```text
 ID:          p1-01
-Goal:        Write the Login section of the observability CONTRACT.md, Grafana half, with proven by.
-Why:         Grafana’s built-in login is the P1 half of the Login contract (R27, §5).
+Goal:        Write the Login and Alert path sections of the observability CONTRACT.md with proven by.
+Why:         Grafana’s built-in login and the send-only alert path are one contract, written before either is built (R8, R27, §5).
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
-Depends on:  p0b-11
-Touches:     services/observability/CONTRACT.md
-Hard limits: R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam.
-Done checks: The Login section has offers, expects, health, config, and proven by. One PR.
-Timebox:     4h
-Proven by:   The R27 CI check and the P2 dashboard-login check (§5). Grafana anonymous-off is the P1 half.
-```
-
-```text
-ID:          p1-02
-Goal:        Write the Alert path section of the observability CONTRACT.md with proven by.
-Why:         Alerts go to Gordon through the send-only bot and never through Hermes (R8, §5).
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
 Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
-Depends on:  p1-01
+Depends on:  p0b-11
 Touches:     services/observability/CONTRACT.md
-Hard limits: R8. The contract lists disk full, node memory above 70%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18).
-Done checks: The Alert path section has offers, expects, health, config, and proven by. One PR.
-Timebox:     4h
-Proven by:   The P1 kill-endpoint alert, the lowered-threshold alerts, and the backup-failure alert.
+Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 70%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18).
+Done checks: The Login section and the Alert path section each have offers, expects, health, config, and proven by. One PR.
+Timebox:     6h
+Proven by:   The R27 CI check and the P2 dashboard-login check (§5). Grafana anonymous-off is the P1 half. The P1 kill-endpoint alert, the lowered-threshold alerts, and the backup-failure alert.
 ```
 
 ### Build
@@ -525,7 +514,7 @@ Why:         Logs for every namespace have to arrive without a second log stack 
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
 Depends on:  p1-04
 Touches:     services/observability/fluent-bit/
-Hard limits: R5; R8; R10. D30. No fallback shipper.
+Hard limits: R5; R8. D30. No fallback shipper.
 Done checks: A log line from kube-system and from platform-testapp is queryable in VictoriaLogs. One PR.
 Timebox:     4h
 ```
@@ -559,9 +548,9 @@ ID:          p1-09
 Goal:        Point Gatus and Grafana at the send-only Telegram alerts bot.
 Why:         Alert delivery has to work while Hermes is absent (R8).
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
-Depends on:  p1-02, p1-08
+Depends on:  p1-01, p1-08
 Touches:     services/observability/ network policy, Gatus provider, Grafana contact point, SOPS secret
-Hard limits: R8; R13 (egress to api.telegram.org only from observability). The bot token and chat ID are the SOPS values Gordon records after /start. The alerts bot has no gateway and no allow-list (R21).
+Hard limits: R8. Egress to api.telegram.org is the alert-path contract (§5), from observability only. The bot token and chat ID are the SOPS values Gordon records after /start. The alerts bot has no gateway and no allow-list (R21).
 Done checks: A Grafana test notification returns success from the Telegram API. The token value is not printed. One PR.
 Timebox:     4h
 ```
@@ -599,7 +588,7 @@ Why:         Fix order (§11): Grafana is already configured (p1-07); CI keeps a
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
 Depends on:  p1-07
 Touches:     tools/checks/ui-auth
-Hard limits: R27. The Hermes dashboard half of this check is added in p2-22, when that dashboard exists.
+Hard limits: R27. The Hermes dashboard half of this check is added in p2-23, when that dashboard exists.
 Done checks: A seeded Grafana manifest with anonymous access on fails ci. The live manifest passes. One PR.
 Timebox:     4h
 ```
@@ -636,43 +625,19 @@ Goal: Gordon chats with the ops bots through the dashboard and Telegram, with me
 
 ```text
 ID:          p2-01
-Goal:        Write the Model provider section of the Hermes core CONTRACT.md with proven by.
-Why:         Profiles name tiers, and the env maps tiers to models, before any bot is deployed (R18, R23, §5).
+Goal:        Write the Model provider, Assistant API, and Skill contract sections of the Hermes core CONTRACT.md with proven by.
+Why:         Tiers, the assistant API, and the skill rules are one core contract, written before any bot is deployed (R15, R17, R18, R23, §5).
 Advances:    P2 exit check: “With the primary model blocked, chat answers from the fallback model; with the provider blocked, the dashboard and Telegram show an error within 30 s and Gatus flags it (R18).”
-Depends on:  p1-13
-Touches:     services/hermes/core/CONTRACT.md
-Hard limits: R18; R23. D7. One xai-oauth login per deploy. A local LLM or a gateway is another base_url and is not built (§9). No xAI API key.
-Done checks: The section has offers, expects, health, config, and proven by. One PR.
-Timebox:     4h
-Proven by:   The P2 fallback check, Gatus provider reachability, and the R23 CI grep (§5).
-```
-
-```text
-ID:          p2-02
-Goal:        Write the Assistant API section of the Hermes core CONTRACT.md with proven by.
-Why:         The dashboard and every later UI talk only to this API (R17, §5).
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
 Advances:    P2 exit check: “Memory: a fact is recalled after a pod restart in a new session; “forget that” is staged, and approving it removes the fact; a memory export produces a file. Memory and skill writes (R12) wait for approval; a test approves one and rejects one.”
-Depends on:  p2-01
-Touches:     services/hermes/core/CONTRACT.md
-Hard limits: R17; R27. Paths are / for the dashboard and /api/<profile>/v1 per profile. /v1/audio/* is reserved and this task adds no audio handler (§5, §9). Memory export produces a file.
-Done checks: The section has offers, expects, health, config, and proven by. One PR.
-Timebox:     4h
-Proven by:   The P2 scripted-prompt check and the memory-export check (§5).
-```
-
-```text
-ID:          p2-03
-Goal:        Write the Skill contract section of the Hermes core CONTRACT.md with proven by.
-Why:         Tools are MCP and procedures are SKILL.md, read-only first (R15, R16, §5).
 Advances:    P2 exit check: “Weather and distance questions get correct answers through the geo MCP server (weather: Open-Meteo; distance: Nominatim plus the OSRM demo, typical drive time) with attribution; the geo tool’s evals in concierge pass.”
 Advances:    P3 exit check: “An eval asserts no bot can send, delete, apply Gmail labels, write to calendar or reach Drive.”
-Depends on:  p2-02
+Depends on:  p1-13
 Touches:     services/hermes/core/CONTRACT.md
-Hard limits: R13; R15; R16. MCP servers run inside the deploy pod, pinned, no sidecars. Write tools run only behind a confirm step. This plan’s writes are inbox drafts and spec-writer’s issues. The geo section records the Nominatim policy decision: at most 1 request per second, cache, User-Agent with Gordon’s contact email, attribution, home taken from SOPS and never looked up.
-Done checks: The section has offers, expects, health, config, and proven by, including the Nominatim decision. One PR.
-Timebox:     4h
-Proven by:   The R16 pin and tag check, the R13 toolset policy check, and the P3 no-write eval (§5).
+Hard limits: R13; R15; R16; R17; R18; R23; R27. D7. One xai-oauth login per deploy. A local LLM or a gateway is another base_url and is not built (§9). No xAI API key. Paths are / for the dashboard and /api/<profile>/v1 per profile. /v1/audio/* is reserved and this task adds no audio handler (§5, §9). Memory export produces a file. MCP servers run inside the deploy pod, pinned, no sidecars. Write tools run only behind a confirm step. This plan’s writes are inbox drafts and spec-writer’s issues. The geo section records the Nominatim policy decision: at most 1 request per second, cache, User-Agent with Gordon’s contact email, attribution, home taken from SOPS and never looked up.
+Done checks: The three sections each have offers, expects, health, config, and proven by, including the Nominatim decision. One PR.
+Timebox:     6h
+Proven by:   The P2 fallback check, Gatus provider reachability, and the R23 CI grep (§5). The P2 scripted-prompt check and the memory-export check (§5). The R16 pin and tag check, the R13 toolset policy check, and the P3 no-write eval (§5).
 ```
 
 ```text
@@ -680,7 +645,7 @@ ID:          p2-04
 Goal:        Add the Profile schema section to the schema CONTRACT.md with proven by.
 Why:         A bot is a profile.yaml, validated before the three profiles are added (R19, §5).
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
-Depends on:  p2-03, p0a-01
+Depends on:  p2-01, p0a-01
 Touches:     services/hermes/core/schema/CONTRACT.md
 Hard limits: R19; R21; R23. Fields: job, toolsets with reasons and read/write tags, cron, evals, telegram true/false with allow-list required when true. Names that collide with status, cron, memory, or skills are rejected. Tiers come from the env bot tier map, not from the profile.
 Done checks: The profile section has offers, expects, health, config, and proven by. One PR.
@@ -693,7 +658,7 @@ ID:          p2-05
 Goal:        Add the Hermes dashboard half of the Login contract, with proven by.
 Why:         The ops dashboard requires its own login, and that login works offline (R18, R27).
 Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).”
-Depends on:  p2-02, p1-01
+Depends on:  p2-01, p1-01
 Touches:     services/observability/CONTRACT.md, services/hermes/core/CONTRACT.md
 Hard limits: R18; R27. D7; D16. Username admin, password hash and signing secret from bootstrap-secrets. The assistant API uses the deploy API key, separate from the dashboard login.
 Done checks: The Login contract names both UIs and the Hermes proven-by line. One PR.
@@ -704,15 +669,27 @@ Proven by:   The R27 CI check and the P2 dashboard-login check (§5).
 ### Build
 
 ```text
-ID:          p2-06
-Goal:        Add the Hermes core base: digest pin, probes, write_approval, toolset policy, seccomp, startup sync.
-Why:         Both deploys are overlays of one core, and Git-sourced config wins on every start (R11, R12).
+ID:          p2-06a
+Goal:        Add the Hermes core base: digest pin, probes, memory limit, and seccomp.
+Why:         Both deploys are overlays of one core image (R11).
 Advances:    P2 exit check: “After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.”
-Depends on:  p2-01, p2-03
-Touches:     services/hermes/core/base, services/hermes/core/config, services/hermes/core/glue, services/hermes/core/templates/profile
-Hard limits: R5; R11; R12; R13. D30. skills.write_approval and memory.write_approval are on. Terminal, file, code-execution, browser, and delegation stay off unless a profile gives a written reason. No custom image. The upstream image is pinned by digest. Startup sync overwrites runtime edits. /v1/audio/* is not implemented.
-Done checks: A kind-or-kubeconform render of the base sets the probes, the memory limit, seccomp, write_approval, and a digest. A unit test shows a runtime edit is replaced by the Git copy. One PR.
-Timebox:     8h
+Depends on:  p2-01
+Touches:     services/hermes/core/base, services/hermes/core/templates/profile
+Hard limits: R5; R11. D30. No custom image. The upstream image is pinned by digest. /v1/audio/* is not implemented.
+Done checks: kustomize build of the base sets the probes, the memory limit, seccomp, write_approval, and a digest. One PR.
+Timebox:     4h
+```
+
+```text
+ID:          p2-06b
+Goal:        Add Hermes startup sync, write_approval, and the toolset policy.
+Why:         Git-sourced config wins on every start, and risky tools stay off unless a profile gives a reason (R12, R13).
+Advances:    P2 exit check: “After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.”
+Depends on:  p2-06a
+Touches:     services/hermes/core/config, services/hermes/core/glue
+Hard limits: R12; R13. skills.write_approval and memory.write_approval are on. Terminal, file, code-execution, browser, and delegation stay off unless a profile gives a written reason. Startup sync overwrites runtime edits.
+Done checks: A unit test shows a runtime edit is replaced by the Git copy. One PR.
+Timebox:     4h
 ```
 
 ```text
@@ -721,7 +698,7 @@ Goal:        Add the hermes.yaml render script and the CI diff check, and seed a
 Why:         One checked-in script renders profiles, and a hand-edited rendered/ must fail (R4).
 Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved was added by a bot or App account, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
-Depends on:  p2-06, p0a-05
+Depends on:  p2-06b, p0a-05
 Touches:     tools/render-profiles, envs/env-01/rendered/, tools/checks/render-diff
 Hard limits: R4. rendered/ is generated and never hand-edited. The stale-render seed is the one P0a deferred until this render existed.
 Done checks: A fresh render matches rendered/. A seeded PR that edits rendered/ without rerendering fails ci. One PR.
@@ -746,7 +723,7 @@ Goal:        Deploy the ops overlay: its own volume, secrets, read-only ServiceA
 Why:         Gordon reaches the three bots through the ops dashboard, which Gatus watches and which requires a login (R11, R13, R27).
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
 Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).”
-Depends on:  p2-06, p2-05, p1-08
+Depends on:  p2-06b, p2-05, p1-08
 Touches:     services/hermes/deploy/ops/, envs/env-01 secrets references
 Hard limits: R5; R11; R13; R27; R28. D30. Namespace hermes-ops. No shared volume or secret with the other deploy. ServiceAccount: get, list, watch, no Secrets. Egress hosts are listed in the core CONTRACT.md. The API key, password hash, and signing secret are the bootstrap Secrets, applied now that the namespace exists (D10). Hostname hermes-ops.alpha.lan.
 Done checks: The pod is Ready, https://hermes-ops.alpha.lan asks for login, and Gatus lists the endpoint. One PR.
@@ -758,7 +735,7 @@ ID:          p2-10
 Goal:        Add concierge, inbox, and homelab from the profile template, with generic SOUL.md files.
 Why:         The starter bots are code, and only concierge faces Telegram (R19, R21).
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
-Depends on:  p2-08, p2-09
+Depends on:  p2-07, p2-08, p2-09
 Touches:     services/hermes/deploy/ops/profiles/{concierge,inbox,homelab}/
 Hard limits: R13; R15; R19; R21. No placeholder bots. SOUL.md has no personal facts. inbox has the fewest tools at this checkpoint (no Gmail until P3). homelab proposes fixes only as chat. Brief crons are not listed yet, so they are absent rather than running. Built-in reminders stay available for the concierge reminder seed.
 Done checks: Three profile.yaml files validate. hermes.yaml lists the three bots. A rendered diff is clean. One PR.
@@ -770,10 +747,10 @@ ID:          p2-11
 Goal:        Add the in-repo geo MCP server and concierge’s geo evals.
 Why:         Weather and distance have to be correct, attributed, and inside the providers’ usage rules (§5, R16).
 Advances:    P2 exit check: “Weather and distance questions get correct answers through the geo MCP server (weather: Open-Meteo; distance: Nominatim plus the OSRM demo, typical drive time) with attribution; the geo tool’s evals in concierge pass.”
-Depends on:  p2-03, p2-10
+Depends on:  p2-01, p2-10
 Touches:     services/hermes/core/skills/geo/
 Hard limits: R15; R16. D36. At most 1 request per second to Nominatim and OSRM, cached, User-Agent set from the SOPS contact email, home from the rounded SOPS value and never geocoded. Attribution: Open-Meteo, and OSRM © OpenStreetMap contributors. Gordon commits the home and email SOPS values before the evals run.
-Done checks: The weather eval and the distance eval pass against the deployed concierge, with attribution in the answer. One PR.
+Done checks: Unit tests show a cached weather answer and a cached distance answer with attribution and at most one Nominatim or OSRM request per second. The deployed eval pass is p2-17. One PR.
 Timebox:     8h
 ```
 
@@ -785,7 +762,7 @@ Advances:    P2 exit check: “A scripted prompt through the assistant API (/api
 Depends on:  p2-10, p1-05
 Touches:     services/hermes/core/skills/metrics/, ops profile toolsets, the pinned MCP
 Hard limits: R13; R15; R16. D29; D36. The Kubernetes MCP is read-only and cannot read Secrets. The metrics MCP queries VictoriaMetrics only. homelab’s written reason for these tools is in profile.yaml. No terminal tool.
-Done checks: A scripted prompt about which workload uses the most memory returns a non-error answer that names a real workload. One PR.
+Done checks: A unit test of the metrics MCP returns the workload with the highest memory from a VictoriaMetrics fixture. The deployed memory prompt is p2-17. One PR.
 Timebox:     6h
 ```
 
@@ -794,7 +771,7 @@ ID:          p2-13
 Goal:        Set the env-01 tier map, the fallback model, and the ops xai-oauth device login.
 Why:         Chat has to survive a blocked primary model on the same subscription login (R18, R23).
 Advances:    P2 exit check: “With the primary model blocked, chat answers from the fallback model; with the provider blocked, the dashboard and Telegram show an error within 30 s and Gatus flags it (R18).”
-Depends on:  p2-09
+Depends on:  p2-09, p2-07
 Touches:     envs/env-01/values/hermes.yaml, ops volume
 Hard limits: R18; R23. Mid: concierge, inbox reply drafting, homelab chat. Cheap: cron, inbox triage, homelab checks. Frontier: on demand only. The device login is Gordon’s approval of the code the pod prints. The token stays on the volume, never in Git or CI.
 Done checks: hermes.yaml maps each tier to a primary and a fallback on xai-oauth. Gordon has approved the device login and a short chat answers. One PR.
@@ -855,7 +832,7 @@ Goal:        Run the fallback, provider-down, and revoked-login drills, and add 
 Why:         A dead provider has to show an error within about 30 seconds instead of hanging (R18).
 Advances:    P2 exit check: “Each bot’s evals (≥3) pass against the deployed bots (make verify, R38); usage is readable in Hermes analytics and the grok.com dashboard; with the subscription login revoked or its limit reached, the dashboard and Telegram show an error within ~30 s and make verify fails (R18).”
 Advances:    P2 exit check: “With the primary model blocked, chat answers from the fallback model; with the provider blocked, the dashboard and Telegram show an error within 30 s and Gatus flags it (R18).”
-Depends on:  p2-13, p2-15, p1-08
+Depends on:  p2-13, p2-15, p2-17, p1-08
 Touches:     Gatus provider check, verify script, observability egress to api.x.ai
 Hard limits: R8; R18. D19; D20. The drills restore xai-oauth before the task ends. Gatus flags the provider check when the override is in place.
 Done checks: The log shows a fallback-model answer, a dashboard and Telegram error within 30 seconds when the provider is blocked, the same error within about 30 seconds for the 401 fixture, and make verify failing during that window and passing after restore. One PR.
@@ -891,7 +868,7 @@ ID:          p2-21
 Goal:        After a pod restart, prove Git config was re-applied, and restore the Hermes volume from backup.
 Why:         Runtime edits must not survive a restart, and the Hermes volume needs its own restore drill (R12, R31).
 Advances:    P2 exit check: “After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.”
-Depends on:  p2-06, p2-16, p0b-10
+Depends on:  p2-06b, p2-16, p0b-10
 Touches:     ops volume, verify script
 Hard limits: R12; R31. If the restored token is stale, Gordon redoes the device login (§8 custody) before chat is called again.
 Done checks: The log shows a planted runtime edit gone after restart, and the restored volume’s checksum matching the backup. One PR.
@@ -928,9 +905,9 @@ Goal:        Add admin-gate, seed the protected-path and label-actor PRs, and ha
 Why:         From this exit, risky PRs need a label from Gordon’s own account (R36). Fix order (§11): the check is the automated gate; the rulebook does not replace it.
 Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved was added by a bot or App account, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Depends on:  p2-07, p2-22, p2-23
-Touches:     .github/workflows/admin-gate.yml, tools/checks/admin-gate, jarvis-apps caller stub
-Hard limits: R36. D38. pull_request_target on opened, synchronize, reopened, labeled, unlabeled. The job reads PR metadata only and does not check out PR code. It removes admin-approved on every new push. Protected paths are the R36 lists for jarvis and jarvis-apps. A Namespace removal fails closed. The jarvis-apps caller is the same trigger, wired fully when jarvis-apps CI grows (p4a-05).
-Done checks: Seeded PRs fail without the label, fail when gordon5417-ai adds admin-approved, fail when the fixture actor is a Bot or an App, and pass after Gordon’s own account adds the label on the latest commit. Branch protection on both repos requires admin-gate. One PR.
+Touches:     .github/workflows/admin-gate.yml, tools/checks/admin-gate, jarvis-apps/.github/workflows/ci.yml
+Hard limits: R36. D38. pull_request_target on opened, synchronize, reopened, labeled, unlabeled. The job reads PR metadata only and does not check out PR code. It removes admin-approved on every new push. Protected paths are the R36 lists for jarvis and jarvis-apps. A Namespace removal fails closed. The jarvis-apps workflow calls admin-gate.yml at a pinned jarvis SHA on pull_request_target in this task. p4a-05 adds the namespaced-object check beside that caller.
+Done checks: Seeded PRs fail without the label, fail when gordon5417-ai adds admin-approved, fail when the fixture actor is a Bot or an App, and pass after Gordon’s own account adds the label on the latest commit. A seeded removal of a PVC or a StorageClass fails without the label (R36). Branch protection on both repos requires admin-gate. One PR.
 Timebox:     8h
 ```
 
@@ -979,16 +956,27 @@ No new §5 contract. The skill contract remains the one written in P2.
 ### Build
 
 ```text
-ID:          p3-01
-Goal:        Add Gmail and Calendar read skills for the brief, and inbox’s read-plus-draft toolset.
-Why:         The daily butler reads mail and calendar, and inbox drafts without sending (R15, §5 skill contract).
+ID:          p3-01a
+Goal:        Add Gmail and Calendar read skills for the brief and for inbox triage.
+Why:         The daily butler reads mail and calendar (R15, §5 skill contract).
 Advances:    P3 exit check: “The morning brief arrives at its scheduled time with calendar, email and weather (Open-Meteo, attributed; “weather unavailable” if it is down), and reaches Telegram [G].”
-Advances:    P3 exit check: “Asked in chat to draft a reply to a seeded email, inbox creates one Gmail draft in that thread and nothing is sent (the Sent folder is unchanged).”
 Depends on:  p2-25
-Touches:     ops profiles, pinned MCP or SKILL.md for Gmail and Calendar
-Hard limits: R13; R15; R16. Scope is Gmail and Calendar read plus Gmail drafts. No send tool, no label tool, no calendar write, no Drive tool. D22. The Google token is SOPS in hermes-ops only. Concierge reads mail for the brief; inbox reads it for triage and is the only bot with the draft tool. Egress to the Google APIs is added to the ops CONTRACT.md host list.
+Touches:     ops profiles, pinned MCP or SKILL.md for Gmail and Calendar read
+Hard limits: R13; R15; R16. Scope is Gmail and Calendar read. No send tool, no label tool, no calendar write, no Drive tool. D22. The Google token is SOPS in hermes-ops only. Concierge reads mail for the brief; inbox reads it for triage. Egress to the Google APIs is added to the ops CONTRACT.md host list.
 Done checks: A read-only call returns one inbox thread and one calendar event after Gordon’s consent step. The toolset policy check still passes. One PR.
-Timebox:     8h
+Timebox:     6h
+```
+
+```text
+ID:          p3-01b
+Goal:        Add inbox’s draft tool, and no send.
+Why:         Inbox drafts a reply without sending (R15).
+Advances:    P3 exit check: “Asked in chat to draft a reply to a seeded email, inbox creates one Gmail draft in that thread and nothing is sent (the Sent folder is unchanged).”
+Depends on:  p3-01a
+Touches:     inbox profile toolset
+Hard limits: R13; R15; R16. Inbox is the only bot with the draft tool. No send tool.
+Done checks: The draft tool is registered on inbox only, and no send tool is registered. One PR.
+Timebox:     4h
 ```
 
 ```text
@@ -1010,10 +998,10 @@ Why:         Listed crons start enabled; the PR is the approval (R19).
 Advances:    P3 exit check: “The morning brief arrives at its scheduled time with calendar, email and weather (Open-Meteo, attributed; “weather unavailable” if it is down), and reaches Telegram [G].”
 Advances:    P3 exit check: “The evening wrap arrives at its scheduled time with the day’s unanswered email ranked by importance and tomorrow’s calendar, and reaches Telegram [G].”
 Advances:    P3 exit check: “The weekly review arrives at its scheduled time with the past week’s calendar and email highlights and the coming week’s calendar, and reaches Telegram [G].”
-Depends on:  p3-01
+Depends on:  p3-01a
 Touches:     envs/env-01/values/hermes.yaml, concierge profile
 Hard limits: R15; R19. D21; D22. The brief includes calendar, email, and Open-Meteo weather with attribution, or the words “weather unavailable” when Open-Meteo is down. The wrap includes unanswered email ranked by importance and tomorrow’s calendar. The weekly review includes the past week’s highlights and the coming week’s calendar. Telegram delivery is through concierge.
-Done checks: A manual run of each cron produces the three bodies in the dashboard session. Telegram arrival is NEEDS GORDON (D17). One PR.
+Done checks: A manual run of each cron produces the three bodies in the dashboard session. The cron expressions in hermes.yaml match D21. Telegram arrival is NEEDS GORDON (D17). One PR.
 Timebox:     8h
 ```
 
@@ -1035,7 +1023,7 @@ Goal:        Add one eval per read skill and the no-write eval.
 Why:         Each read skill needs an eval, and no bot may send, delete, label, write calendar, or reach Drive (R15, R38).
 Advances:    P3 exit check: “Each read skill is covered by an eval in its bot’s evals/.”
 Advances:    P3 exit check: “An eval asserts no bot can send, delete, apply Gmail labels, write to calendar or reach Drive.”
-Depends on:  p3-01, p3-02, p2-17
+Depends on:  p3-01b, p3-02, p2-17
 Touches:     profiles/*/evals/
 Hard limits: R15; R38. P3 evals are required by this exit and sit on top of the P2 set. Appendix seeds included: inbox ranking, the draft-shaped send request that must not send, the Drive refusal, the calendar-write refusal, and the PR question.
 Done checks: pytest for these evals passes against the deployed bots. The no-write eval fails the run if any forbidden tool is registered. One PR.
@@ -1047,7 +1035,7 @@ ID:          p3-06
 Goal:        Ask inbox to draft a reply to the seeded email, and show the Sent folder unchanged.
 Why:         Drafts are the one Gmail write in this plan, and they must not send (R15).
 Advances:    P3 exit check: “Asked in chat to draft a reply to a seeded email, inbox creates one Gmail draft in that thread and nothing is sent (the Sent folder is unchanged).”
-Depends on:  p3-01, p3-05
+Depends on:  p3-01b, p3-05
 Touches:     inbox draft tool, verify script
 Hard limits: R15. D24. The seed subject is jarvis-p3-seed. The draft is created in that thread. No send tool is called.
 Done checks: The log shows one new draft in the seed thread and a Sent-folder id list that matches the pre-check list. One PR.
@@ -1162,7 +1150,7 @@ Why:         Fix order (§11): the ResourceSet already limits what an app is; CI
 Advances:    P4a exit check: “A seeded jarvis-apps PR with a cluster-scoped object fails CI (R30).”
 Depends on:  p4a-04, p2-24
 Touches:     jarvis-apps/.github/checks/namespaced-only.sh, jarvis-apps/.github/workflows/ci.yml
-Hard limits: R30; R36. D31. ci.yml also calls jarvis admin-gate.yml at a pinned SHA on pull_request_target. .github/ on jarvis-apps is protected, so this PR waits for admin-approved.
+Hard limits: R30; R36. D31. ci.yml keeps the admin-gate caller added in p2-24 and adds the namespaced-object check. .github/ on jarvis-apps is protected, so this PR waits for admin-approved.
 Done checks: A seeded PR that adds a ClusterRole fails ci. A seeded PVC fails ci. apps/demo passes. One PR.
 Timebox:     6h
 ```
@@ -1271,22 +1259,35 @@ Advances:    P4b exit check: “A seeded code-factory:ready label added by the A
 Advances:    P4b exit check: “spec-writer turns an idea into an issue with acceptance criteria and without code-factory:ready; a failing checker verdict keeps the PR a draft and sends it back through the fix loop until the fix cap (R40).”
 Depends on:  p4b-03, p2-20
 Touches:     services/hermes/deploy/code-factory/, profiles/foreman, profiles/spec-writer
-Hard limits: R5; R11; R12; R13; R15; R19; R33. D30. Its own volume, secrets, and digest pin. Pre-upgrade backup matches the ops pattern. No ServiceAccount token. Egress is api.x.ai and api.github.com, listed in the CONTRACT.md. YOLO stays off on this pod; YOLO is only inside the throwaway lane (R13, R42). Each bot has at least three evals. Gordon approves this deploy’s xAI device login.
+Hard limits: R5; R11; R12; R13; R15; R19; R33. D30. Its own volume, secrets, and digest pin. Pre-upgrade backup matches the ops pattern. No ServiceAccount token. Egress is api.x.ai and api.github.com, listed in the CONTRACT.md. YOLO stays off on this pod; YOLO is only inside the throwaway lane (R13, R42). Gordon approves this deploy’s xAI device login. Evals for these bots are p4b-09a and p4b-09b.
 Done checks: The pod is Ready, the two profiles validate, and the manifest has no ServiceAccount token and no Cursor key. One PR.
-Timebox:     8h
+Timebox:     6h
 ```
 
 ```text
-ID:          p4b-06
-Goal:        Add the reusable lane workflow, the jarvis-apps caller pinned to a jarvis SHA, and the publisher script.
-Why:         Agents never hold push credentials; the publish job opens the draft with a short-lived App token (R42).
+ID:          p4b-06a
+Goal:        Add the reusable lane workflow and the jarvis-apps caller pinned to a jarvis SHA.
+Why:         The lane holds a read-only token and the Cursor key, and never the App key (R42).
 Advances:    P4b exit check: “A toy code-factory:ready issue becomes a draft PR in jarvis-apps with a green CI check and a checker check run (pass or fail with notes) from a different model family.”
 Advances:    P4b exit check: “Token scopes show no agent holds push credentials and the code-factory cannot write to jarvis.”
 Depends on:  p4b-02, p4b-04
-Touches:     jarvis/.github/workflows/code-factory-lane.yml, jarvis-apps/.github/workflows/code-factory.yml, publisher/
-Hard limits: R10 (Python publisher); R40; R42. D27. The lane job receives the Cursor user API key and a read-only token, passed explicitly, and never the App key. The App cannot edit workflows. The caller passes jarvis_sha. Permissions on the lane job are contents: read. .github/ is protected (R36).
-Done checks: A workflow dry review shows the lane job without the App token and the publish job as the only PR writer. One PR.
-Timebox:     8h
+Touches:     jarvis/.github/workflows/code-factory-lane.yml, jarvis-apps/.github/workflows/code-factory.yml
+Hard limits: R40; R42. D27. The lane job receives the Cursor user API key and a read-only token, passed explicitly, and never the App key. The caller passes jarvis_sha. Permissions on the lane job are contents: read. .github/ is protected (R36).
+Done checks: A workflow dry review shows the lane job without the App token. One PR.
+Timebox:     6h
+```
+
+```text
+ID:          p4b-06b
+Goal:        Add the publisher script that opens the draft PR and posts the checker check run.
+Why:         Agents never hold push credentials; the publish job uses a short-lived App token (R42).
+Advances:    P4b exit check: “A toy code-factory:ready issue becomes a draft PR in jarvis-apps with a green CI check and a checker check run (pass or fail with notes) from a different model family.”
+Advances:    P4b exit check: “Token scopes show no agent holds push credentials and the code-factory cannot write to jarvis.”
+Depends on:  p4b-06a
+Touches:     services/hermes/deploy/code-factory/publisher/
+Hard limits: R10 (Python); R40; R42. The App cannot edit workflows. The publish job is the only PR writer. .github/ is protected (R36).
+Done checks: A workflow dry review shows the publish job as the only PR writer. One PR.
+Timebox:     4h
 ```
 
 ```text
@@ -1295,7 +1296,7 @@ Goal:        Enforce the label actor, the one-run queue, the fix cap, and the ti
 Why:         A ready label counts only from Gordon’s account, and a run that times out is marked failed (R40).
 Advances:    P4b exit check: “A seeded code-factory:ready label added by the App, not by Gordon’s account, is ignored, the workflow comments why, and foreman reports it (R40).”
 Advances:    P4b exit check: “A forced timeout gets the issue the code-factory:failed label, and foreman says so.”
-Depends on:  p4b-06
+Depends on:  p4b-06b
 Touches:     code-factory workflow
 Hard limits: R40; R42. D26; D27. Any other actor is ignored with a comment. Concurrency is a queue, one lane at a time. code-factory:failed is applied by the publish job.
 Done checks: A unit fixture of the actor check accepts Gordon’s login and rejects an App login. The workflow file sets the cap and the timeout input. One PR.
@@ -1315,16 +1316,27 @@ Timebox:     4h
 ```
 
 ```text
-ID:          p4b-09
-Goal:        Teach spec-writer to file an issue only after a chat confirm, and foreman to report finished, failed, and ignored runs.
-Why:         spec-writer never adds code-factory:ready, and foreman never codes (R15, R40).
-Advances:    P4b exit check: “A seeded code-factory:ready label added by the App, not by Gordon’s account, is ignored, the workflow comments why, and foreman reports it (R40).”
+ID:          p4b-09a
+Goal:        Teach spec-writer to file an issue only after a chat confirm, with at least three evals.
+Why:         spec-writer never adds code-factory:ready (R15, R40).
 Advances:    P4b exit check: “spec-writer turns an idea into an issue with acceptance criteria and without code-factory:ready; a failing checker verdict keeps the PR a draft and sends it back through the fix loop until the fix cap (R40).”
 Depends on:  p4b-05, p4b-07
-Touches:     profiles/spec-writer, profiles/foreman, publisher report hook
-Hard limits: R15; R19; R40. D37. The issue has acceptance criteria and does not carry code-factory:ready. The write tool is confirm-gated. Foreman’s cron skips the model call when nothing changed. Evals cover the appendix lines for “turn this idea into a code-factory issue” and “what did the code-factory finish overnight?”. About 10 evals on this deploy.
-Done checks: A scripted confirm files one issue without the ready label, and a second run with the confirm denied files nothing. Foreman’s session lists an ignored fixture run. One PR.
-Timebox:     8h
+Touches:     profiles/spec-writer
+Hard limits: R15; R19; R40. The issue has acceptance criteria and does not carry code-factory:ready. The write tool is confirm-gated. Evals cover the appendix line for “turn this idea into a code-factory issue” and at least two more. This task holds spec-writer’s evals from the deploy task.
+Done checks: A scripted confirm files one issue without the ready label, and a second run with the confirm denied files nothing. spec-writer’s evals pass. One PR.
+Timebox:     6h
+```
+
+```text
+ID:          p4b-09b
+Goal:        Teach foreman to report finished, failed, and ignored runs, with at least three evals.
+Why:         Foreman watches and reports, and never codes (R40).
+Advances:    P4b exit check: “A seeded code-factory:ready label added by the App, not by Gordon’s account, is ignored, the workflow comments why, and foreman reports it (R40).”
+Depends on:  p4b-05, p4b-06b, p4b-07
+Touches:     profiles/foreman
+Hard limits: R19; R40. D37. Foreman’s cron skips the model call when nothing changed. Evals cover “what did the code-factory finish overnight?” and at least two more. Together with p4b-09a the deploy has about 10 evals.
+Done checks: Foreman’s session lists an ignored fixture run. Foreman’s evals pass. One PR.
+Timebox:     4h
 ```
 
 ```text
@@ -1332,10 +1344,11 @@ ID:          p4b-10
 Goal:        Show the lane token scopes and show the code-factory cannot write to jarvis.
 Why:         The lane holds no push credential, and the App is installed on jarvis-apps only (R42, R40).
 Advances:    P4b exit check: “Token scopes show no agent holds push credentials and the code-factory cannot write to jarvis.”
-Depends on:  p4b-06
+Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved was added by a bot or App account, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
+Depends on:  p4b-06b
 Touches:     tools/checks/token-scopes, both workflows
 Hard limits: R36; R40; R42. The check fails if the lane job’s permissions include write, or if the App token secret is passed into the lane job. A live call with the App token against jarvis returns not-found or forbidden.
-Done checks: make verify prints the lane permission set and the rejected write to jarvis. One PR.
+Done checks: make verify prints the lane permission set and the rejected write to jarvis. A seeded jarvis-apps PR fails admin-gate when the code-factory App adds admin-approved. One PR.
 Timebox:     4h
 ```
 
@@ -1344,7 +1357,7 @@ ID:          p4b-11
 Goal:        Run a toy code-factory:ready issue through to a draft PR with green CI and a checker check run.
 Why:         This is the P4b happy path: one issue becomes a checked draft in jarvis-apps (R40, R41).
 Advances:    P4b exit check: “A toy code-factory:ready issue becomes a draft PR in jarvis-apps with a green CI check and a checker check run (pass or fail with notes) from a different model family.”
-Depends on:  p4b-06, p4b-08, p4b-09, p4a-04
+Depends on:  p4b-06b, p4b-08, p4b-09a, p4b-09b, p4a-04
 Touches:     jarvis-apps issue, code-factory/<issue> branch
 Hard limits: R40; R41; R42. Gordon applies code-factory:ready. The checker uses Grok, a different family from Composer. The PR stays draft. The check run is named checker and carries pass or fail with notes.
 Done checks: The draft PR exists, ci is green, and the checker check run is on the PR. One PR (the machinery). The draft itself stays for Gordon to merge.
@@ -1356,7 +1369,7 @@ ID:          p4b-12
 Goal:        Seed a code-factory:ready label added by the App, and show it ignored, commented, and reported.
 Why:         A ready label from anyone but Gordon’s account must not start a lane (R40).
 Advances:    P4b exit check: “A seeded code-factory:ready label added by the App, not by Gordon’s account, is ignored, the workflow comments why, and foreman reports it (R40).”
-Depends on:  p4b-07, p4b-09
+Depends on:  p4b-07, p4b-09b
 Touches:     jarvis-apps issue, foreman session
 Hard limits: R40. The App adds the label. The workflow comments why it was ignored. No lane branch is pushed.
 Done checks: The issue has the workflow comment, no code-factory branch, and a foreman report of the ignored run. One PR.
@@ -1370,7 +1383,7 @@ Why:         A failed check sends the work back through the fix loop and then st
 Advances:    P4b exit check: “spec-writer turns an idea into an issue with acceptance criteria and without code-factory:ready; a failing checker verdict keeps the PR a draft and sends it back through the fix loop until the fix cap (R40).”
 Depends on:  p4b-07, p4b-11
 Touches:     lane workflow, a toy issue whose acceptance criteria fail once
-Hard limits: R40. D26. spec-writer’s half of this exit is proven in p4b-09. This task proves the fix loop. The PR remains draft. After the cap, the publish job applies code-factory:failed.
+Hard limits: R40. D26. spec-writer’s half of this exit is proven in p4b-09a. This task proves the fix loop. The PR remains draft. After the cap, the publish job applies code-factory:failed.
 Done checks: The log shows the first fail, one fix resubmit, the draft still draft, and code-factory:failed when the cap is exceeded on a second seed that cannot pass. One PR.
 Timebox:     6h
 ```
@@ -1380,7 +1393,7 @@ ID:          p4b-14
 Goal:        Force a lane timeout and show code-factory:failed plus foreman’s report.
 Why:         A run that times out is failed and reported, not left running (R40).
 Advances:    P4b exit check: “A forced timeout gets the issue the code-factory:failed label, and foreman says so.”
-Depends on:  p4b-07, p4b-09
+Depends on:  p4b-07, p4b-09b
 Touches:     sandbox timeout input, foreman
 Hard limits: R40; R42. D27. The seed sets the timeout to 1 minute against an issue the adapter is told to wait out. The default for real issues stays 30 minutes.
 Done checks: The issue carries code-factory:failed, and foreman’s session says the run timed out. One PR.
