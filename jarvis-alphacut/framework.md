@@ -57,6 +57,7 @@ Conflict rule: a contradiction in this framework, or a rule that blocks an exit 
 - Coding agent: Cursor agents that build JARVIS from the plan. They run on the bastion as its agent user and the gordon5417-ai GitHub account, never Gordon’s.
 - Bastion: Gordon’s LAN control host, not a cluster node; it runs make, Ansible, kubectl and the coding agents. Gordon’s user runs bootstrap and site.yml; a separate agent user runs the coding agents with the kubeconfig, and has no SSH key, no age private key and no access to the previous system’s nodes.
 - Env: one deployment target under envs/ (Example: env-01, the one-node baseline).
+- Gordon (admin): the system’s admin and only human approver. Agents merge routine green PRs (R36); only he merges code-factory PRs, PRs held by admin-gate, and project-plans changes. [G] marks exit checks only he can verify; admin-approved (the label from his own account) and admin-gate (the check that requires it) are the code-level names for his approval.
 - Gordon-only action: a step a coding agent cannot or must not do (§8).
 - admin-approved: a PR label that counts only when Gordon’s own GitHub account added it; every new push removes it; the admin-gate check requires it on risky PRs (R36).
 - Checkpoint: a sub-phase with its own exit checks (P0a, P0b, P4a, P4b).
