@@ -22,8 +22,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D3
 
-- Decision: local-path data is `/var/lib/jarvis/local-path`. The backup path is `/var/lib/jarvis/backup`. When a node has a data disk, `/var/lib/jarvis` is its mount point, so the paths stay the same (D42).
-- Reason: both directories are required and neither path is named.
+- Decision: the data paths are env settings in `cluster-vars.yaml`: `local_path_data` (default `/var/lib/jarvis/local-path`) and `backup_path` (default `/var/lib/jarvis/backup`). The defaults live once, in the env schema. When a node has a data disk, `/var/lib/jarvis` is its mount point, so the defaults sit on it (D42).
+- Reason: both directories are required and neither path is named. Gordon (2026-10-20): an operator who changes them means it, and the k3s mount guard follows the configured paths (D42).
 - Where: Ansible, VolSync, etcd snapshots (`p0a-12`, `p0b-09`).
 - Status: accepted-with-plan default.
 
@@ -43,7 +43,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D6
 
-- Decision: etcd snapshot interval and retention are the built-in defaults of that same k3s version. The snapshot directory is the backup path (D3).
+- Decision: etcd snapshot interval and retention take the built-in default values of that same k3s version, written as product constants in the k3s role’s `vars/` (D46). The snapshot directory is under the backup path (D3).
 - Reason: a schedule is required and no numbers are given. Snapshots are for same-node rollback only (R31).
 - Where: k3s config (`p0a-12`, `p0b-10`).
 - Status: accepted-with-plan default.
@@ -131,7 +131,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D17
 
-- Decision: `make verify PHASE=<phase>` (`tools/verify/<phase>`, short, no tests of its own) checks only what a machine can check from the controller as the agent user. It waits for or reads live state (for example `kubectl wait --for=condition=Ready` on Flux objects) and compares it with the repo (for example node role labels against inventory groups, D42). It exits non-zero on any miss, including when it finds zero objects, and prints no reminder or placeholder lines. Everything else is the owner checklist written in that phase’s verify step in the plan: owner runs, `[G]` checks and evidence links such as seed PRs. Gordon pastes those results with the attached script output, and his review is the gate. Steps that need the age key (a full `site.yml`, `bootstrap-secrets`) are owner runs by Gordon. The agent user keeps node SSH only for narrow runs that need no age key (for example `site.yml --tags kubeconfig`). The “another ID gets none” check uses a gateway-handler fixture for the non-allow-listed ID.
+- Decision: `make verify PHASE=<phase>` (`tools/verify/<phase>`, short, no tests of its own) checks only what a machine can check from the controller as the agent user. It waits for or reads live state (for example `kubectl wait --for=condition=Ready` on Flux objects) and compares it with the repo (for example node role labels against the roles in the inventory, D42). It exits non-zero on any miss, including when it finds zero objects, and prints no reminder or placeholder lines. Everything else is the owner checklist written in that phase’s verify step in the plan: owner runs, `[G]` checks and evidence links such as seed PRs. Gordon pastes those results with the attached script output, and his review is the gate. Steps that need the age key (a full `site.yml`, `bootstrap-secrets`) are owner runs by Gordon. The agent user keeps node SSH only for narrow runs that need no age key (for example `site.yml --tags kubeconfig`). The “another ID gets none” check uses a gateway-handler fixture for the non-allow-listed ID.
 - Reason: §2 requires attached verify output, and reserves `[G]` checks and full `site.yml` runs for Gordon. A script that echoes reminders proves nothing, and no person’s name belongs in the repo (§11 code design). The age key is never on the agent user (R25, §8). No second Telegram account is available, so the non-allow-listed ID is a fixture.
 - Where: every phase verify task.
 - Status: accepted-with-plan default.
@@ -285,7 +285,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D39
 
-- Decision: k3s NetworkPolicy can't match hostnames. Egress is DNS plus TCP 443 to 0.0.0.0/0 except RFC1918, the pod and service CIDRs, and the node IP. CONTRACT.md lists hosts as documentation. Hostname allow-listing waits for the §9 proxy.
+- Decision: k3s NetworkPolicy can't match hostnames. Egress is DNS plus TCP 443 to 0.0.0.0/0 except RFC1918, 100.64.0.0/10, the pod and service CIDRs, and the node IP. CONTRACT.md lists hosts as documentation. Hostname allow-listing waits for the §9 proxy.
 - Reason: a NetworkPolicy matches IPs, not names. The host list records intent and does not pretend to enforce it.
 - Where: `p1-09`, `p2-09`, `p3-01a`, `p4b-05`, `p4a-07`.
 - Status: Confirmed by Gordon 2026-10-19.
@@ -306,43 +306,48 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D42
 
-- Decision: node roles are Ansible inventory groups in `envs/<env>/inventory/hosts.yml`. A node’s optional data disk is a host var in `envs/<env>/inventory/host_vars/<host>.yml`. The env schema validates both in CI, and there is no separate nodes file.
+- Decision: each node declares its roles and optional data disk in its own block in `envs/<env>/inventory/hosts.yml`. A standard constructed inventory config next to it turns the roles into real Ansible groups when the inventory loads. The env schema validates hosts.yml in CI. There are no host_vars and no separate nodes file.
 
   ```yaml
   # envs/<env>/inventory/hosts.yml
   all:
-    children:
-      control_plane: {hosts: {<host>: }}   # allowed groups: control_plane, workers, storage, backup, gpu
-      workers:       {hosts: {<host>: }}
-      storage:       {hosts: {<host>: }}
-      backup:        {hosts: {<host>: }}
+    hosts:
+      <host>:
+        roles: [control_plane, workers, storage, backup]   # known: control_plane, workers, storage, backup, gpu, edge
+        data_disk: {id: /dev/disk/by-id/<stable id>, wipe_confirmed: true}   # optional; a whole disk, never /dev/nvmeXnY or -partN
 
-  # envs/<env>/inventory/host_vars/<host>.yml
-  data_disk:                          # optional; omit it and data stays on the root disk
-    id: /dev/disk/by-id/<stable id>   # a whole disk; never /dev/nvmeXnY or a -partN path
-    wipe_confirmed: true
+  # envs/<env>/inventory/roles.yml (the same in every env)
+  plugin: ansible.builtin.constructed
+  strict: true
+  keyed_groups:
+    - key: roles
+      prefix: ""
+      separator: ""
   ```
 
-  - Groups: the names use underscores, never hyphens. The schema rejects an unknown group name, a host_vars file for a host that is not in the inventory, and any host_vars key other than `data_disk` (no IPs, R25). It requires exactly one host in `control_plane` (the k3s server) and exactly one in `backup`. A host may sit in several groups.
-  - Plays target groups: base-os runs on `all`, node-disk only on hosts that set `data_disk`, and the k3s server on `control_plane`. The k3s config sets `node-name` from `inventory_hostname`. Labels come from each host’s `group_names` as `role.<dns_suffix>/<group>=true`, prefixed by the env’s domain (D44). A task on `control_plane` applies them with the kubernetes.core module on every run, removing `role.<dns_suffix>/` labels for groups a host has left, so group changes are reconciled. k3s `node-label` is not used, because it applies only at registration. Verify flags any drift (D17).
+  - Groups: the empty prefix and separator name each group exactly after its role (`control_plane`, `workers`, `storage`, `backup`, `gpu`, `edge`; underscores, never hyphens). So `--limit storage`, `ansible-inventory --graph` and `hosts: storage` in plays all work.
+  - Schema: roles must come from the known set. There must be exactly one `control_plane` host and exactly one `backup` host. `data_disk` must have that shape. A host block allows no other keys (no IPs, R25).
+  - Plays target groups: base-os runs on `all`, node-disk only on hosts that set `data_disk`, and the k3s server on `control_plane`. The k3s config sets `node-name` from `inventory_hostname`.
+  - Labels: each host gets `role.<dns_suffix>/<role>=true` for each of its roles; the `role.<dns_suffix>/` prefix is reserved for these labels. A task on `control_plane` applies them with the kubernetes.core module on every run. It removes prefixed labels for roles a host no longer has, so role changes are reconciled. k3s `node-label` is not used, because it applies only at registration. Verify flags any drift (D17).
+  - Edge (optional): ports 80/443 (Traefik) and 53 (JARVIS DNS) land on the `control_plane` node unless an env gives `edge` to one or more nodes. This is a deliberate rule, not a silent default. The label task sets servicelb’s node-selection label (`svccontroller.k3s.cattle.io/enablelb=true`) on the edge nodes, or on the `control_plane` node when no node is edge. servicelb then binds those ports only there.
   - Roles are declared, never auto-detected, and site.yml asserts them against facts. Before any change, a `gpu` host must have an NVIDIA device. After node-disk and before k3s, a host with `data_disk` must have `/var/lib/jarvis` mounted as the `jarvis-data` filesystem. A fresh node passes because node-disk has just mounted the disk.
-  - Boot safety: on a host with `data_disk`, node-disk installs a systemd drop-in for `k3s.service` with `RequiresMountsFor=/var/lib/jarvis`. With `nofail` the host still boots without the disk, but k3s does not start, so nothing is written to the root disk in its place.
-  - Disk: the data disk mounts at `/var/lib/jarvis`, so the D3 paths do not change; without one, the same paths sit on the root disk. k3s and images stay on root. The filesystem label `jarvis-data` identifies the disk, and fstab mounts it by `LABEL=jarvis-data` with `nofail`. Layout: `local-path/` (PVC volumes), `backup/etcd-snapshots/`, `backup/restic/` (VolSync repositories). Backups on the same disk cover mistakes and rollback, not disk loss; off-site is deferred (R31).
+  - Boot safety: on a host with `data_disk`, node-disk installs a systemd drop-in for `k3s.service` with `RequiresMountsFor=` the configured `local_path_data` and `backup_path` (D3). With `nofail` the host still boots without the disk, but k3s does not start, so nothing is written to the root disk in its place.
+  - Disk: the data disk mounts at `/var/lib/jarvis`, so the default D3 paths sit on it; without a data disk they sit on the root disk. k3s and images stay on root. The filesystem label `jarvis-data` identifies the disk, and fstab mounts it by `LABEL=jarvis-data` with `nofail`. Default layout: `local-path/` (PVC volumes), `backup/etcd-snapshots/`, `backup/restic/` (VolSync repositories). Backups on the same disk cover mistakes and rollback, not disk loss; off-site is deferred (R31).
   - Safety (`node-disk` role, after base-os, before k3s first starts): refuse a missing disk, a partition, the root disk, a disk mounted elsewhere, or a host where another disk already carries the label. A disk whose filesystem is labeled `jarvis-data` is mounted, never wiped. Any other disk is wiped only when both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>` are present. If either is missing, the role stops and prints the disk’s model, size and partitions. It never mounts over a non-empty `/var/lib/jarvis`.
   - Public repo: the by-id path contains the disk’s serial number. That is accepted as low risk.
-  - env-01: bench.lan is in `control_plane`, `workers`, `storage` and `backup`. Its data disk is the 1 TB Corsair MP600 Mini, by the by-id path read from bench.lan. Gordon confirms it may be wiped at the wipe-and-rebuild.
-- Reason: Gordon (2026-10-20) wants roles defined in the inventory, where Ansible already targets hosts. Groups give plays native targeting, and `group_names` gives the labels without a second list. Checking declared roles against facts catches a wrong inventory without guessing roles. A label mount survives device renames. Two keys keep a stale flag or a copied env from wiping a disk.
-- Where: `p0a-11a` (before `p0a-12`), `p0a-12`, `p0a-13`, `p0a-18`; env-00 is the multi-node fixture (D43); framework §5 and §6.
+  - env-01: bench.lan has roles `control_plane`, `workers`, `storage` and `backup`. It has no `edge` role, so the ports land on it as the control plane. Its data disk is the 1 TB Corsair MP600 Mini, by the by-id path read from bench.lan. Gordon confirms it may be wiped at the wipe-and-rebuild.
+- Reason: Gordon (2026-10-20) wants roles declared on each node, so one block reads as the whole node. The constructed config gives plays real groups without a second list. Checking declared roles against facts catches a wrong inventory without guessing roles. A label mount survives device renames. Two keys keep a stale flag or a copied env from wiping a disk.
+- Where: `p0a-11a` (before `p0a-12`), `p0a-12`, `p0a-13`, `p0a-18`, `p0b-03`, `p0b-05`; env-00 is the multi-node fixture (D43); framework §5 and §6.
 - Status: Proposed; accepted when the owner merges this PR.
 
 ## D43
 
 - Decision: `envs/env-00` is an example env, a pretend 7-node cluster that is never deployed. It is the one complete fixture for the env schema, the inventory and the Ansible role logic.
-  - Hosts are invented, on the example domain `env-00.example`: `cp-1` (`control_plane`), `wk-1` to `wk-4` (`workers`, with `wk-2` and `wk-3` also in `gpu`), `st-1` (`storage`) and `bk-1` (`backup`). Every group is used.
-  - Every host except `wk-4` has a `data_disk` host_vars file with a made-up by-id path, and `wipe_confirmed` is true on some and false on others. `wk-4` keeps its data on the root disk.
-  - Values set every key the schema allows, using example values: `dns_suffix: env-00.example`, `flux_git_repo_url: https://github.com/example-owner/jarvis`, the owner handle `example-owner`, and an example `ssh_user`. No value is copied from a real env.
-  - It has no `secrets/`, no SOPS group_vars and no `flux/`, because it never deploys and the schema does not require them. If a later schema key needs a SOPS file, it gets a clearly fake placeholder encrypted to a throwaway test key.
-  - CI validates it like any env. A behavior test asserts that env-00 sets every key the schema allows, so a new schema key fails CI until env-00 sets it. CI also runs `ansible-inventory --graph` on its inventory, plus the role and fact asserts in check mode where they need no host (group and host_vars rules, the label set from `group_names`).
+  - Hosts are invented, on the example domain `env-00.example`: `cp-1` (`control_plane`), `wk-1` to `wk-4` (`workers`; `wk-2` and `wk-3` also `gpu`, and `wk-1` also `edge`), `st-1` (`storage`) and `bk-1` (`backup`). Every role is used.
+  - Every host except `wk-4` has an inline `data_disk` with a made-up by-id path, and `wipe_confirmed` is true on some and false on others. `wk-4` keeps its data on the root disk.
+  - Values set every key the schema allows, using example values: `dns_suffix: env-00.example`, `flux_git_repo_url: https://github.com/example-owner/jarvis`, `apps_git_repo_url: https://github.com/example-owner/jarvis-apps`, an example `llm_provider_host`, and an example `ssh_user`. The owner handle `example-owner` comes from the repo URLs. No value is copied from a real env.
+  - It has no `secrets/`, no SOPS group_vars and no `flux/`, because it never deploys and the schema does not require them. If a later schema key needs a SOPS file, it gets a clearly fake placeholder encrypted to a throwaway test key, under env-00’s own `.sops.yaml` rule (D45).
+  - CI validates it like any env. A behavior test asserts that env-00 sets every key the schema allows, so a new schema key fails CI until env-00 sets it. CI also runs `ansible-inventory --graph` on its inventory, plus the role and fact asserts in check mode where they need no host (the roles rules, the groups the constructed config builds, the label set).
 - Reason: Gordon (2026-10-20): Jarvis is a product, not a home-lab pet, so its core is proven against a full multi-node env, not only the one-node env-01. Requiring every key catches schema keys the example forgot.
 - Where: `p0a-05a`, extended by `p0a-11a`; used by `p0a-11` and `p0a-12`; framework §5 and §6.
 - Status: Proposed; accepted when the owner merges this PR.
@@ -350,15 +355,41 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D44
 
 - Decision: environment-identity values never appear in the repo’s core, and each has one source of truth.
-  - Values that live in env settings are read from there. The core-names check (`tools/checks/core-names`) reads them from every `envs/<env>` except env-00, which is excluded from every source, env names included, so fixtures, tests and role asserts may name it: inventory hostnames, `ssh_user`, `dns_suffix`, and the repo slug (`<owner>/<repo>`) and owner handle from the env’s `flux_git_repo_url` (schema-validated, in `envs/<env>/values`). A new env is covered automatically.
+  - Values that live in env settings are read from there. The core-names check (`tools/checks/core-names`) reads them from every `envs/<env>` except env-00, which is excluded from every source, env names included, so fixtures, tests and role asserts may name it: inventory hostnames, `ssh_user`, `dns_suffix`, and the repo slugs (`<owner>/<repo>`) and owner handle from the env’s `flux_git_repo_url` and `apps_git_repo_url` (schema-validated, in `envs/<env>/values`, D45). A new env is covered automatically.
   - The agent account handle is not repo config, so the repo never references it and core-names has nothing to check. If the repo ever needs it, it becomes an env value and is covered automatically.
   - Only values that never live in the repo come from a GitHub Actions repo variable, with an env var of the same name for local runs. Today that is just the owner’s personal name. The check fails loudly when that variable is unset in CI.
   - The check holds no values of its own. It scans `infra/`, `platform/`, `services/`, `tools/`, `docs/`, `.github/` (except `.github/CODEOWNERS`, which needs literal handles), every README and `rulebooks/`. Workflows name their own repo with `${{ github.repository }}` or local `./.github/...` refs, never a hardcoded slug. Hostnames, `dns_suffix`, the repo slug, the owner handle and the owner’s personal name match case-insensitively as whole words, so a handle inside a URL is caught and a substring of a longer word is not.
   - `ssh_user` matches only in identity contexts: `/home/<user>`, `<user>@<host>` and `~<user>`. It never matches as a bare word, so `ubuntu` the OS and `ubuntu:26.04` pass. The check holds no word lists.
   - `envs/<env>/` may hold hostnames, the repo URL with its owner handle, usernames and the domain, because that is env config. The owner’s personal name is allowed nowhere, `envs/` included.
   - The repo is matched as its slug, because the bare repo name is the product name, which core may use.
+  - Product rules, separate from identity values, are in the same check: the word `bastion` is banned because the repo stays bastion-agnostic, and any hardcoded `/home/` path is banned. Both are listed in the env schema CONTRACT.md next to the identity values.
   - Code that needs an identity value at run time, such as admin-gate’s owner account or the code-factory label-actor check, reads the owner handle from the env values.
-  - The LAN domain is the env’s DNS suffix: `dns_suffix` in `cluster-vars.yaml`, schema-validated and reaching manifests as `DNS_SUFFIX` through postBuild. Hostnames, Ingress, the wildcard cert and the node-label prefix `role.<dns_suffix>/<group>` all derive from it. Every nodeSelector and affinity on that prefix uses `${DNS_SUFFIX}` through Flux postBuild and is never hardcoded, so changing `dns_suffix` relabels every node and its selectors follow.
+  - The LAN domain is the env’s DNS suffix: `dns_suffix` in `cluster-vars.yaml`, schema-validated and reaching manifests as `${dns_suffix}` through postBuild (D45). Hostnames, Ingress, the wildcard cert and the node-label prefix `role.<dns_suffix>/<role>` all derive from it. Every nodeSelector and affinity on that prefix uses `${dns_suffix}` through Flux postBuild and is never hardcoded, so changing `dns_suffix` relabels every node and its selectors follow.
 - Reason: Gordon (2026-10-20) wants core to read the same for any owner. Reading env settings, plus one variable for the name that never enters the repo, keeps one source of truth, and the check never contains the names it guards.
-- Where: `p0a-05` (`dns_suffix`), `p0a-07`, `p0a-12`, `p0a-18`, `p2-24`, the P4b label-actor check; framework R3, §5, §6, §8 and §11.
+- Where: `p0a-05` (`dns_suffix`, `apps_git_repo_url`), `p0a-07`, `p0a-12`, `p0a-18`, `p2-24`, the P4b label-actor check; framework R3, §5, §6, §8 and §11.
+- Status: Proposed; accepted when the owner merges this PR.
+
+## D45
+
+- Decision: how env settings are defined and reach the cluster.
+  - `apps_git_repo_url`: required and https, validated like `flux_git_repo_url`. It names the apps repo for app hosting, admin-gate and the code-factory. core-names also reads its slug and owner handle (D44).
+  - `llm_provider_host`: the AI provider’s API hostname. Hermes and the Gatus provider probe both read it, and the p2-18 drill overrides it.
+  - Flux variables are the lowercase cluster-vars ConfigMap keys (`${dns_suffix}`, never `${DNS_SUFFIX}`), and lists are JSON strings. postBuild substitution is strict: the kustomize-controller `StrictPostBuildSubstitutions` feature gate, set through the FluxInstance, makes a missing variable fail instead of becoming empty.
+  - `.sops.yaml` has one age creation rule per env, keyed on `envs/<env>/`. A new env adds its own rule.
+  - Tools that act on one env (bootstrap-secrets, seal, the cluster-vars render) need an explicit env name (`ENV=` or `--env`) and fail loudly without one. None picks the only env under `envs/`. The stale-render check skips envs with no `flux/` folder, which covers env-00.
+  - The env schema CONTRACT.md has these sections: node roles and labels (the label format, the reserved prefix, reconciled every run, selectors only through `${dns_suffix}`, D42); identity values and product rules (D44); env-00 as the every-key reference, where a new schema key is set in env-00 in the same PR (D43); and cluster-vars to postBuild (lowercase names, lists as JSON strings, strict substitution).
+- Reason: Gordon (2026-10-20), after the env and contract audit: one source per value, failures that are loud rather than empty, and no tool that guesses the env.
+- Where: `p0a-03` (`.sops.yaml`), `p0a-04`, `p0a-05`, `p0a-05a`, `p0a-07`, `p0a-14`, `p2-18`, `p2-24`, `p4a-02`, `p4b-09a`, `p4b-09b`; framework R4, §5 and §6.
+- Status: Proposed; accepted when the owner merges this PR.
+
+## D46
+
+- Decision: product constants, not env settings.
+  - The etcd snapshot schedule and retention (D6) and the journald size (SystemMaxUse 2G, §7) live in their roles’ `vars/`. Role `defaults/` never hold anything that looks like env config, so only the schema holds defaults.
+  - Ingress is always the bundled Traefik, so there is no `ingress_class` setting.
+  - Blocked egress always includes 100.64.0.0/10 (CGNAT and tailnet), alongside RFC1918, the pod and service CIDRs and the node IP (D39).
+  - The k3s role asserts amd64 hosts for now.
+  - Future env settings, added only when an env needs one: monitoring retention, `ssh_port` and the registry mirror (§9).
+- Reason: Gordon (2026-10-20): a setting that no env changes is a constant. Making it look configurable invites drift.
+- Where: `p0a-11`, `p0a-12`, D39 egress tasks; framework §11.
 - Status: Proposed; accepted when the owner merges this PR.
