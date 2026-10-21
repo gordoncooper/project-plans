@@ -27,7 +27,7 @@ One list, from §8. Each action names the task that waits on it.
 - P0: fresh-install Ubuntu 26.04 Server (minimal install) with Gordon’s SSH key on the env’s SSH user (ssh_user, default ubuntu; D34). Task: p0a-11b.
 - P0: set a DHCP reservation. Task: p0a-11b.
 - P0: run the first and second site.yml and the second make bootstrap-secrets from the controller (owner runs, D17). Task: p0a-14.
-- P0: record each data disk’s by-id path as the node’s data_disk in inventory/hosts.yml, and give the run-time wipe confirmation (D42). Task: p0a-11b.
+- P0: for each node that has a data disk, record its by-id path as the node’s data_disk in inventory/hosts.yml, and give the run-time wipe confirmation (D42). env-01 has none. Task: p0a-11b.
 - P0: once JARVIS DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
 - P0: trust the root cert on each device. Task: p0b-08.
 - P1: create the send-only alerts bot with BotFather. Task: p1-09.
@@ -213,7 +213,7 @@ Advances:    P0b exit check: “Restore drill: a deleted volume is restored by V
 Depends on:  p0a-11, p0a-11a
 Touches:     infra/ansible/roles/node-disk, infra/ansible/site.yml
 Hard limits: R1; R31. D3; D42 (asserts, disk layout, boot safety, wipe safety). Use modules and facts (community.general.parted, community.general.filesystem, ansible.posix.mount); shell only where no module exists. A data_disk without an id fails loudly.
-Done checks: A narrow node-disk run on the env-01 node without the run-time confirmation stops before touching the disk and prints its model, size and partitions. The live proof is p0a-14. One PR.
+Done checks: Tests in this PR show the role refuses without the run-time confirmation and prints the disk’s model, size and partitions, and that the confirmed path works. env-01 has no data disk, so the live wipe path stays untested until a node has a real second disk. One PR.
 ```
 
 ```text
@@ -248,7 +248,7 @@ Advances:    P0a exit check: “A SOPS-encrypted secret decrypts in-cluster.”
 Depends on:  p0a-13, p0a-02, p0a-08
 Touches:     envs/env-01/flux/, platform/flux-operator/, platform/backups/ namespace only, tools/render-cluster-vars, tools/checks/render-diff
 Hard limits: R1; R4; R25; R34. D9; D10; D11; D45 (lowercase variables, JSON lists, strict substitution, $${...} escapes, explicit env). Resources that use their own ${…} syntax set substitute: disabled. One script renders the cluster-vars ConfigMap from values/cluster-vars.yaml. This PR adds the cluster-vars to postBuild section to the env schema CONTRACT.md.
-Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. Gordon’s first site.yml on the fresh node (owner run, D17) passes the D42 asserts; wipes, labels and mounts the data disk before k3s, leaving the LABEL=jarvis-data nofail fstab entry and the k3s drop-in (systemctl show k3s -p RequiresMountsFor lists the data paths); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. Gordon’s second site.yml and second bootstrap-secrets change nothing. One PR.
+Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. Gordon’s first site.yml on the fresh node (owner run, D17) passes the D42 asserts; runs no node-disk, since env-01 has no data_disk and keeps its data on root (D42); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. Gordon’s second site.yml and second bootstrap-secrets change nothing. One PR.
 ```
 
 ```text

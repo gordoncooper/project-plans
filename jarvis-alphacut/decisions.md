@@ -341,7 +341,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Boot safety: node-disk adds a `k3s.service` drop-in with `RequiresMountsFor=` the configured `local_path_data` and `backup_path` (D3), so k3s never starts without the disk.
   - Wipe safety (node-disk, before k3s first starts): refuse a missing disk, a partition, the root disk, a disk mounted elsewhere, or a second disk carrying the label. A `jarvis-data` disk is mounted, never wiped. Any other disk is wiped only with both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>`; `wipe_confirmed: true` alone never permits a wipe; otherwise the role stops and prints the disk’s model, size and partitions. It never mounts over a non-empty `/var/lib/jarvis`.
   - The by-id path holds the disk serial; that is accepted as low risk in a public repo.
-  - env-01: bench.lan has `control_plane`, `workers`, `storage` and `backup`, and no `edge`. Its data disk is the 1 TB Corsair MP600 Mini, by its by-id path.
+  - env-01: bench.lan has `control_plane`, `workers`, `storage` and `backup`, and no `edge`. It has no `data_disk` and keeps its data on the root disk on purpose.
 - Reason: one block reads as the whole node, and the constructed config gives plays real groups without a second list. Fact asserts catch a wrong inventory without guessing roles. A label mount survives device renames. Two keys stop a stale flag or a copied env from wiping a disk.
 - Where: `p0a-11a`, `p0a-11b`, `p0a-12`, `p0a-13`, `p0a-14`, `p0a-18`, `p0b-03`, `p0b-05`; framework §5 and §6.
 - Status: Confirmed by Gordon 2026-10-20.
