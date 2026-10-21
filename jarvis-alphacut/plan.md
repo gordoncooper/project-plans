@@ -244,13 +244,13 @@ Timebox:     8h
 
 ```text
 ID:          p0a-15
-Goal:        Add Renovate on jarvis and jarvis-apps, with minor and patch auto-merge held for about 3 days.
+Goal:        Add Renovate on jarvis and jarvis-apps, opening minor and patch PRs after a 3-day hold, with auto-merge off until the P2 exit.
 Why:         P0a is done only after Renovate has opened a PR (R33).
 Advances:    P0a exit check: “Renovate is installed and has opened at least one PR (its onboarding PR counts).”
 Depends on:  p0a-14
 Touches:     renovate.json in both repos
-Hard limits: R33. Majors are not auto-merged. Hermes digests are not auto-merged (the digest rule is enforced again in p2-20). Renovate does not manage the k3s version (D5). The image digest check itself lands with the first third-party image (p0b-07). Gordon installs the hosted Renovate GitHub App; no local Renovate or config-validator tooling (§11 lean standard).
-Done checks: Renovate has opened its onboarding PR or a dependency PR. The config shows the 3-day hold for minor and patch and the k3s exclusion. One PR.
+Hard limits: R33. Auto-merge is off for every update until p2-25 turns it on for minor and patch. Majors are not auto-merged. Hermes digests are not auto-merged (the digest rule is enforced again in p2-20). Renovate does not manage the k3s version (D5). The image digest check itself lands with the first third-party image (p0b-07). Gordon installs the hosted Renovate GitHub App; no local Renovate or config-validator tooling (§11 lean standard).
+Done checks: Renovate has opened its onboarding PR or a dependency PR. The config shows the 3-day hold for minor and patch, auto-merge off, and the k3s exclusion. One PR.
 Timebox:     4h
 ```
 
@@ -932,8 +932,8 @@ Advances:    P2 exit check: “After a pod restart, Git config is re-applied; re
 Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Depends on:  p2-11, p2-15, p2-16, p2-17, p2-18, p2-19, p2-20, p2-21, p2-24
 Touches:     Makefile, tools/verify/p2
-Hard limits: R35; R36; R38. D17. This PR touches tools/verify/, so it waits for admin-approved. The [G] lines are concierge’s Telegram reply and the grok.com dashboard. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result. The checklist reads live state and links evidence; it does not re-run CI checks (D17).
-Done checks: make verify PHASE=p2 prints NEEDS GORDON for the Telegram [G] check and the grok.com dashboard [G] check, and exits 0 with the scripted prompts, geo evals, memory log, eval summary, degrade log, bump log, dashboard login, restore log, admin-gate seeds, and Gordon’s Telegram paste. One PR.
+Hard limits: R35; R36; R38. D17. This PR touches tools/verify/, so it waits for admin-approved. The [G] lines are concierge’s Telegram reply and the grok.com dashboard. Once the P2 exit check passes, a small renovate.json change in both repos turns on minor and patch auto-merge (R33); majors and Hermes digests stay off. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result. The checklist reads live state and links evidence; it does not re-run CI checks (D17).
+Done checks: make verify PHASE=p2 prints NEEDS GORDON for the Telegram [G] check and the grok.com dashboard [G] check, and exits 0 with the scripted prompts, geo evals, memory log, eval summary, degrade log, bump log, dashboard login, restore log, admin-gate seeds, and Gordon’s Telegram paste. After the exit passes, both repos’ renovate.json show minor and patch auto-merge on. One PR, plus the renovate.json change in each repo.
 Timebox:     6h
 ```
 
