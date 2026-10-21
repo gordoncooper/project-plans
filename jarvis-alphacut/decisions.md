@@ -22,7 +22,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D3
 
-- Decision: local-path data is `/var/lib/jarvis/local-path`. The backup path is `/var/lib/jarvis/backup`.
+- Decision: local-path data is `/var/lib/jarvis/local-path`. The backup path is `/var/lib/jarvis/backup`. When a node has a data disk, `/var/lib/jarvis` is its mount point, so the paths stay the same (D42, proposed).
 - Reason: both directories are required and neither path is named.
 - Where: Ansible, VolSync, etcd snapshots (`p0a-12`, `p0b-09`).
 - Status: accepted-with-plan default.
@@ -58,6 +58,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Backups: `platform/backups/CONTRACT.md`
   - Login and alert path: `services/observability/CONTRACT.md`
   - Model provider, assistant API, and skill contract: `services/hermes/core/CONTRACT.md`
+  - Each Hermes deploy (`services/hermes/deploy/ops`, `services/hermes/deploy/code-factory`) is a component root; its `CONTRACT.md` lists the R13 egress hosts it uses.
   - Sandbox: `services/hermes/deploy/code-factory/sandbox/CONTRACT.md`
   - Code-factory work protocol: `services/hermes/deploy/code-factory/CONTRACT.md`
   - App hosting: `platform/app-hosting/CONTRACT.md`
@@ -67,14 +68,14 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D8
 
-- Decision: the R2 check treats a component root as a §6 folder the layout assigns `CONTRACT.md`. Nested directories are not component roots.
+- Decision: the R2 check treats a component root as a §6 folder the layout assigns `CONTRACT.md`. Every direct child of `platform/` is a root. Nested directories are not component roots, and a parent that holds only nested roots and no files of its own is skipped until it is built.
 - Reason: the rule requires the file and does not define the folder set. A check on every directory would fail on `skills/` and `tests/`.
 - Where: `tools/checks` (`p0a-08`).
 - Status: accepted-with-plan default.
 
 ## D9
 
-- Decision: a Flux path with no component yet contains one ConfigMap named `placeholder`, so the Kustomization is Ready. The task that adds the component removes that ConfigMap.
+- Decision: a Flux path with no component yet contains one ConfigMap named `placeholder-<layer>` (unique per layer, since two layers can share a namespace), so the Kustomization is Ready. The task that adds the component removes that ConfigMap.
 - Reason: P0a requires every Flux object Ready before Traefik, observability, and Hermes exist.
 - Where: `envs/env-01/flux` (`p0a-14` and later component tasks).
 - Status: accepted-with-plan default.
@@ -89,7 +90,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D11
 
 - Decision: the first Flux Operator chart pin is one release behind current, so Renovate has a PR to open. Merging that PR is allowed afterward.
-- Reason: the P0a check requires an open Renovate PR, and a fully current pin set can open none.
+- Reason: it gives Renovate a real dependency PR to open, which p3-04 can reuse as a stuck-update seed. The P0a check also accepts Renovate’s onboarding PR.
 - Where: the Flux Operator pin in `p0a-14`, opened as a PR by `p0a-15`.
 - Status: accepted-with-plan default.
 
@@ -130,8 +131,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D17
 
-- Decision: `make verify PHASE=<phase>` runs every check the agent user can run from the bastion. Commands only Gordon can run, and every `[G]` check, print a `NEEDS GORDON` line. The attached output includes his pasted result. A missing paste fails the run. The “another ID gets none” check uses a gateway-handler fixture for the non-allow-listed ID.
-- Reason: §2 requires attached verify output, and reserves `[G]` checks and `site.yml` for Gordon. The agent user has no SSH key (R25, §8). No second Telegram account is available, so the non-allow-listed ID is a fixture.
+- Decision: `make verify PHASE=<phase>` is a short checklist (`tools/verify/<phase>`, about 50 lines, no tests of its own) that runs the live reads the agent user can run and lists the evidence links. Steps that need the age key (a full `site.yml`, `bootstrap-secrets`) are owner runs, and they and every `[G]` check print a `NEEDS GORDON` line. The attached output includes his pasted result, and Gordon reviewing it is the gate. The “another ID gets none” check uses a gateway-handler fixture for the non-allow-listed ID.
+- Reason: §2 requires attached verify output, and reserves `[G]` checks and full `site.yml` runs for Gordon. The age key is never on the agent user (R25, §8). No second Telegram account is available, so the non-allow-listed ID is a fixture.
 - Where: every phase verify task.
 - Status: accepted-with-plan default.
 
@@ -249,7 +250,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D34
 
-- Decision: the node SSH user is an env setting, `ssh_user` in `cluster-vars.yaml`, default `ubuntu`. Gordon installs Ubuntu with his SSH key on that user. `site.yml` sets `ansible_user` from it and runs every task as root with become; k3s is a root systemd service, and nothing installs under that user.
+- Decision: the node SSH user is an env setting, `ssh_user` in `cluster-vars.yaml`, default `ubuntu`. The default lives once, in the env schema’s resolved values; Ansible consumes the resolved value and adds no fallback of its own. Gordon installs Ubuntu with his SSH key on that user. `site.yml` sets `ansible_user` from it and runs every task as root with become; k3s is a root systemd service, and nothing installs under that user.
 - Reason: the user is only a login, so the Ubuntu default needs no extra user, and an env that differs changes one value (R3, R4).
 - Where: `p0a-01`, `p0a-06`, `p0a-12`, `p0a-13`.
 - Status: Confirmed by Gordon 2026-10-19.
@@ -302,3 +303,24 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 - Reason: GitHub’s own server. Its read-only and toolset switches are the whole restriction. App auth is native. R13 allows this one token in ops.
 - Where: `p3-02`, `p3-04`, `p4b-09a`.
 - Status: Confirmed by Gordon 2026-10-19.
+
+## D42
+
+- Decision (proposed, not yet accepted): node roles and disks are env values in a new `envs/<env>/values/nodes.yaml`, validated by the env schema and read by Ansible only (not rendered into the Flux cluster-vars ConfigMap). Shape:
+
+  ```yaml
+  nodes:
+    bench.lan:                         # key must be an inventory host
+      roles: [control-plane, worker, storage, backup]   # allowed: control-plane, worker, storage, backup, gpu
+      data_disk:                       # optional; omit it and data stays on the root disk
+        id: /dev/disk/by-id/<stable id>   # never /dev/nvmeXnY
+        wipe_confirmed: true           # committed intent; the PR is reviewed by Gordon
+  ```
+
+  - Roles: exactly one `control-plane` (the k3s server with `--cluster-init`; joining more servers or agents is built when a second node exists). Each role becomes a node label `role.jarvis.lan/<role>=true` through k3s `node-label` (one key per role, since a node can hold several). `storage` marks nodes that may hold local-path volumes, `backup` the node whose `backup_path` holds the restic repository and etcd snapshots (exactly one per env for now), and `gpu` is a label only until §9 local models arrive.
+  - Disks: a node with `data_disk` gets it at `/var/lib/jarvis`, so `local_path_data` and `backup_path` (D3) do not change, and k3s, local-path and VolSync need no new settings. The k3s data dir and container images stay on the root disk. A node without `data_disk` uses the same paths on the root disk.
+  - Ansible (`node-disk` role, before k3s): resolve the by-id path and refuse if it is missing, holds the root filesystem, or is mounted. If the disk already carries this env’s Jarvis mark (filesystem label `jarvis-data` and `/var/lib/jarvis/.jarvis-env` holding the env name), mount it by UUID and change nothing else, so the second run is `changed=0`. Otherwise wipe only when `wipe_confirmed: true` and the operator passes the run-time confirmation `-e jarvis_wipe_confirm=<node>:<disk id>`; with either one missing, stop and print the disk’s model, size and partitions. A wipe makes one GPT partition, ext4 with label `jarvis-data`, an fstab entry by UUID, and the mark file. Ansible refuses to mount over a non-empty `/var/lib/jarvis` on the root disk; moving existing data is a manual step (or a rebuild).
+  - env-01: bench.lan holds every role, with `data_disk` set to the 1 TB Corsair MP600 Mini by its by-id path (to be read on the node with `ls -l /dev/disk/by-id/`; needs Gordon’s confirmation). The 100 GB root keeps the OS, k3s and images.
+- Reason: Gordon (2026-10-20) wants disks and node roles as env config, root paths or a secondary disk per node, with a secondary disk wiped only after confirmation, so multi-node envs where only some nodes have a second disk work. Keeping the mount at the D3 paths means nothing above Ansible changes. Two keys (a committed flag plus a run-time confirmation) keep a stale flag or a copied env from wiping a disk.
+- Where: `p0b-02a` (new), before `p0b-09`. If accepted, framework §6 lists `values/nodes.yaml` and its role-label naming becomes `role.jarvis.lan/<role>=true`.
+- Status: proposed, not yet accepted.
