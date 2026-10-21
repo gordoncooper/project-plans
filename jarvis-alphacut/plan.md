@@ -298,7 +298,7 @@ Why:         Fix order (§11): prose only for what the checks and the deny list 
 Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class).”
 Depends on:  p0a-06, p0a-07, p0a-08, p0a-10
 Touches:     rulebooks/coding-agents.md, AGENTS.md, .github/pull_request_template.md
-Hard limits: R35; R39. AGENTS.md points at the rulebook and does not copy it or the framework. The rulebook states the §11 lean standard, code design and review rules in a few lines. The PR template is the brief template plus an evidence line and a short ready-to-merge list. Branch names for coding agents are agent/<topic> (§6).
+Hard limits: R35; R39. AGENTS.md points at the rulebook and does not copy it or the framework. The rulebook states the §11 lean standard, code design and review rules in a few lines. The PR template is the brief template plus an evidence line and a short ready-to-merge list, including that each new or changed rule check fails on a seeded bad value. Branch names for coding agents are agent/<topic> (§6).
 Done checks: A reviewer can point at one rule that exists only in the rulebook because it cannot be a check. The template contains the §11 fields. One PR.
 Timebox:     4h
 ```
@@ -936,9 +936,9 @@ Goal:        Add admin-gate, seed the protected-path and label-actor PRs, and ha
 Why:         From this exit, risky PRs need a label from Gordon’s own account (R36). Fix order (§11): the check is the automated gate; the rulebook does not replace it.
 Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Depends on:  p2-07, p2-22, p2-23
-Touches:     .github/workflows/admin-gate.yml (logic inline), jarvis-apps/.github/workflows/ci.yml
-Hard limits: R36. D35; D38; D44. No owner or repo is hardcoded: the approver is the repository owner from the event (github.repository_owner), and each caller passes its R36 path list. pull_request_target on opened, synchronize, reopened, labeled, unlabeled. The job reads PR metadata only and does not check out code. It removes admin-approved on every new push. A Namespace removal fails closed. The jarvis-apps admin-gate job runs only on pull_request_target and calls admin-gate.yml at a pinned jarvis SHA, written literally because uses: takes no expressions; jarvis-apps is not scanned by core-names. It is its own required check. p4a-05 adds the namespaced-only check to the pull_request ci job. Image publish stays in build.yml.
-Done checks: Seeded PRs fail without the label, fail when gordon5417-ai adds admin-approved, fail when the fixture actor is a Bot or an App, and pass after Gordon’s own account adds the label on the latest commit. A seeded removal of a PVC or a StorageClass fails without the label (R36). Branch protection on both repos requires admin-gate as its own check, separate from ci. The jarvis-apps admin-gate job checks out no code. One PR.
+Touches:     .github/workflows/admin-gate.yml, tools/checks/admin-gate, jarvis-apps/.github/workflows/ci.yml
+Hard limits: R36. D35; D38; D44. No owner or repo is hardcoded: the approver is the repository owner from the event (github.repository_owner), and each caller passes its R36 path list. pull_request_target on opened, synchronize, reopened, labeled, unlabeled. The job reads PR metadata only and checks out no PR code: the workflow sparse-checks out only tools/checks/admin-gate at the pinned jarvis SHA and runs it on the event. It removes admin-approved on every new push. A Namespace removal fails closed. The jarvis-apps admin-gate job runs only on pull_request_target and calls admin-gate.yml at a pinned jarvis SHA, written literally because uses: takes no expressions; jarvis-apps is not scanned by core-names. It is its own required check. p4a-05 adds the namespaced-only check to the pull_request ci job. Image publish stays in build.yml.
+Done checks: Seeded PRs fail without the label, fail when gordon5417-ai adds admin-approved, fail when the fixture actor is a Bot or an App, and pass after Gordon’s own account adds the label on the latest commit. A seeded removal of a PVC or a StorageClass fails without the label (R36). Branch protection on both repos requires admin-gate as its own check, separate from ci. The jarvis-apps admin-gate job checks out no PR code. One PR.
 Timebox:     8h
 ```
 
@@ -1193,7 +1193,7 @@ Why:         Fix order (§11): the ResourceSet already limits what an app is; CI
 Advances:    P4a exit check: “A seeded jarvis-apps PR with a cluster-scoped object fails CI (R30).”
 Depends on:  p4a-04, p2-24
 Touches:     jarvis-apps/.github/checks/namespaced-only.sh, jarvis-apps/.github/workflows/ci.yml
-Hard limits: R30; R36. D31; D35. The pull_request ci job runs the namespaced-only check and holds no secrets. The admin-gate job added in p2-24 stays on pull_request_target, checks out no code, and remains its own required check. Image publish stays in build.yml on push to main (§6). .github/ on jarvis-apps is protected, so this PR waits for admin-approved.
+Hard limits: R30; R36. D31; D35. The pull_request ci job runs the namespaced-only check and holds no secrets. The admin-gate job added in p2-24 stays on pull_request_target, checks out no PR code, and remains its own required check. Image publish stays in build.yml on push to main (§6). .github/ on jarvis-apps is protected, so this PR waits for admin-approved.
 Done checks: A seeded PR that adds a ClusterRole fails ci. A seeded PVC fails ci. apps/demo passes. One PR.
 Timebox:     6h
 ```

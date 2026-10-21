@@ -257,7 +257,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D35
 
-- Decision: jarvis-apps PR-code jobs (`ci`, and the namespaced-only check) run on `pull_request` only, with no secrets. A separate job named `admin-gate` runs only on `pull_request_target`, never checks out code, and is its own required check. Image publish stays in `build.yml` on push to main (§6).
+- Decision: jarvis-apps PR-code jobs (`ci`, and the namespaced-only check) run on `pull_request` only, with no secrets. A separate job named `admin-gate` runs only on `pull_request_target`, checks out no PR code, and is its own required check. Image publish stays in `build.yml` on push to main (§6).
 - Reason: P0 requires branch protection with check `ci` on both repos. `pull_request_target` must not run PR code. `admin-gate` is metadata-only and its own required check. P0a’s `ci` job starts green. p2-24 adds the `admin-gate` job. p4a-05 adds the namespaced-only check to the `pull_request` job.
 - Where: `p0a-06`, `p2-24`, `p4a-04`, `p4a-05`.
 - Status: accepted-with-plan default.
@@ -278,7 +278,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D38
 
-- Decision: admin-gate’s bot and App actor cases are proven by a fixture event (actor type Bot, and actor type App) run in CI against the workflow’s inline logic. The live PR proves a label from `gordon5417-ai` fails, and a label Gordon’s own account adds after the latest commit passes.
+- Decision: admin-gate’s bot and App actor cases are proven by a fixture event (actor type Bot, and actor type App) run in CI against `tools/checks/admin-gate`, the same script the workflow runs. The live PR proves a label from `gordon5417-ai` fails, and a label Gordon’s own account adds after the latest commit passes.
 - Reason: the P2 check requires a bot or App actor, and the code-factory App is created at P4 (§8).
 - Where: p2-24. The live App label is repeated at p4b-10.
 - Status: Confirmed by Gordon 2026-10-19.
@@ -359,7 +359,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Scan: `infra/`, `platform/`, `services/`, `tools/`, `docs/`, `.github/` except `CODEOWNERS`, every README and `rulebooks/`. Env names are allowed in `envs/**` and `docs/**`, the other values in `envs/<env>/`, and the personal name nowhere.
   - Match: case-insensitive whole words, so a handle inside a URL is caught and a longer word is not. The repo matches as its slug, because the bare name is the product name. `ssh_user` matches only as `/home/<user>`, `<user>@<host>` or `~<user>`, so `ubuntu:26.04` passes. The check holds no values and no word lists.
   - Product rules in the same check: the word `bastion` and any hardcoded `/home/` path are banned.
-  - Workflows name their own repo with `${{ github.repository }}` or local `./.github/` refs. admin-gate and the code-factory label-actor check trust the repository owner from the event (`github.repository_owner`) and read no repo files.
+  - Workflows name their own repo with `${{ github.repository }}` or local `./.github/` refs. admin-gate and the code-factory label-actor check trust the repository owner from the event (`github.repository_owner`) and check out no PR code.
   - The LAN domain is `dns_suffix`. Hostnames, Ingress, the wildcard cert and the label prefix `role.<dns_suffix>/` derive from it, and every selector on that prefix uses `${dns_suffix}` (D45).
 - Reason: core reads the same for any owner. Reading env settings keeps one source of truth, and the check never contains the names it guards.
 - Where: `p0a-05`, `p0a-07`, `p0a-12`, `p0a-18`, `p2-24`, `p4b-07`; framework R3, R36, §5 and §11.
