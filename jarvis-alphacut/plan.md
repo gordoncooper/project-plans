@@ -212,8 +212,8 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0a-11, p0a-11a
 Touches:     infra/ansible/roles/node-disk, infra/ansible/site.yml
-Hard limits: R1; R31. D3; D42 (asserts, disk layout, boot safety, wipe safety). Use modules and facts (community.general.parted, community.general.filesystem, ansible.posix.mount); shell only where no module exists. A data_disk without an id fails loudly.
-Done checks: Tests in this PR show the role refuses without the run-time confirmation and prints the disk’s model, size and partitions, and that the confirmed path works. env-01 has no data disk, so the live wipe path stays untested until a node has a real second disk. One PR.
+Hard limits: R1; R31. D3; D42 (asserts, disk layout, boot safety, wipe safety). Use modules and facts (community.general.parted, community.general.filesystem, ansible.posix.mount); shell only where no module exists. The env schema requires data_disk.id.
+Done checks: A small test shows the role refuses the root disk, refuses to format without both confirmations, and adopts a disk already labelled jarvis-data. env-01 has no data disk, so the live wipe path stays untested until a node has a real second disk. One PR.
 ```
 
 ```text
