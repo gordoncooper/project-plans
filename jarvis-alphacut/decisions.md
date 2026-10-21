@@ -350,7 +350,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 - Decision: `envs/env-00` is a never-deployed example env, a pretend 7-node cluster, and the one complete fixture for the env schema, the inventory and the Ansible roles.
   - Hosts on `env-00.example`: `cp-1` (`control_plane`), `wk-1` to `wk-4` (`workers`; `wk-2` and `wk-3` also `gpu`, `wk-1` also `edge`), `st-1` (`storage`) and `bk-1` (`backup`). Every host but `wk-4` has a made-up `data_disk`, with `wipe_confirmed` true on some and false on others; `wk-4` keeps its data on root.
   - Values set every schema key with example values (Example: `dns_suffix: env-00.example`, repo URLs under `example-owner`). Nothing is copied from a real env.
-  - No `secrets/`, SOPS files or `flux/`. A later key that needs a SOPS file gets a fake value under a throwaway test key and env-00’s own `.sops.yaml` rule (D45).
+  - No `secrets/`, SOPS files or `flux/`.
   - CI validates it like any env, fails when the schema allows a key env-00 does not set, and runs `ansible-inventory --graph` and `--syntax-check` against it.
 - Reason: Jarvis is a product, so core is proven against a multi-node env, not only the one-node env-01.
 - Where: `p0a-05a`, `p0a-11`, `p0a-11a`; framework §5 and §6.
