@@ -289,7 +289,7 @@ R33. Upgrades: images are pinned by digest and upgraded by Renovate PRs. k3s is 
 
 R34. Git on the env’s code delivery provider (GitHub, §5) is the one source of truth. No hand edits in the cluster; coding agents change it only through Git and make targets; any mirror is read-only. Why: one main. Enforced by: Flux owns cluster state; the Cursor CLI deny list (.cursor/cli.json) blocks direct kubectl writes, helm, ssh and secret decryption (a guardrail that shell wrappers can bypass).
 
-R35. Coding agents build. Every plan task is written in the brief template (goal, why, hard limits, done checks, timebox). Done means evidence attached (test output, health check, commit). A task past its timebox shows a failed state. Why: outcome-focused, no hung work. Enforced by: PR template.
+R35. Coding agents build. Every plan task is written in the brief template (goal, why, hard limits, done checks, timebox). Done means evidence attached (test output, health check, commit). A plan timebox sizes the task and is not a stop; a task past a timebox its brief sets stops and reports a failed state. Why: outcome-focused, no hung work. Enforced by: PR template.
 
 R36. Until the P2 exit, agents merge their own PRs when required checks pass. From the P2 exit, branch protection on the default branch of jarvis and jarvis-apps requires green CI plus one gate check, admin-gate: the reusable .github/workflows/admin-gate.yml sparse-checks out only tools/checks/admin-gate at the pinned jarvis SHA and runs it on the event. It fails any PR that touches a protected path (jarvis: envs/*/secrets/, envs/*/values/apps.yaml, platform/backups/, infra/, services/hermes/core/config/, tools/checks/, tools/verify/, rulebooks/, docs/code-delivery/, docs/build-agent/, AGENTS.md, CLAUDE.md, .cursor/, .github/ and .sops.yaml; jarvis-apps: .github/, AGENTS.md and CLAUDE.md), removes a Namespace, PVC or StorageClass, or comes from the code-factory App, unless it carries an admin-approved label added by Gordon’s own GitHub account, the repository owner (the R40 label-actor pattern; github.repository_owner assumes user-owned repos, and a move to an org makes the approver a repo variable). The gate runs on pull_request_target (opened, synchronize, reopened, labeled, unlabeled), reads PR metadata only and never checks out PR code, and removes admin-approved on every new push; the jarvis-apps caller uses the same trigger. Everything else still merges on green. Code-factory PRs stay draft; Gordon labels and merges them. In project-plans (framework and plan, §11), only Gordon merges; gordon5417-ai may open PRs. Why: gate only what is risky, once there is something to protect; agents never edit the rules they follow; works on free GitHub, which does not enforce CODEOWNERS review. Enforced by: branch protection requiring admin-gate (seeded P2 checks); on project-plans, only Gordon merges (by convention; gordon5417-ai opens PRs only).
 
@@ -398,7 +398,7 @@ Two repos: jarvis (infra, platform, services) and jarvis-apps (apps JARVIS hosts
 jarvis/
   AGENTS.md                    lean pointer to the rulebooks
   Makefile                     render | check | verify | hermes-backup | bootstrap-secrets | seal | google-consent (wraps tools/)
-  .sops.yaml                   age recipients; one creation rule per env, keyed on envs/<env>/ (a new env adds its own rule, D45)
+  .sops.yaml                   age recipients; one creation rule per env, keyed on envs/<env>/secrets/ (a new env adds its own rule, D45)
   .cursor/cli.json             Cursor CLI permission list for coding agents (deny beats allow)
   renovate.json
   docs/                        README.md (points to project-plans for the framework, plan and decisions; never copies them), CONTRACT.template.md, code-delivery/CONTRACT.md (provider contract; github only), build-agent/CONTRACT.md (agent contract; cursor only)
@@ -444,7 +444,7 @@ jarvis-apps/
     _template/                 CONTRACT.md, app.yaml (source, port, health path), deploy/ (namespaced objects only), Dockerfile or src/
     <app>/                     own code, or a pinned upstream ref built to GHCR
   .github/
-    workflows/                 code-factory.yml (issues: labeled caller of jarvis code-factory-lane.yml@<sha>, passing jarvis_sha as an input for the lane checkout), build.yml (GHCR), ci.yml (calls jarvis admin-gate.yml@<sha> on pull_request_target)
+    workflows/                 code-factory.yml (issues: labeled caller of jarvis code-factory-lane.yml@<sha>, passing jarvis_sha as an input for the lane checkout), build.yml (GHCR), ci.yml (calls jarvis admin-gate.yml@<sha> on pull_request_target, passing the same SHA as an input for the admin-gate checkout)
 ```
 
 ### Env model

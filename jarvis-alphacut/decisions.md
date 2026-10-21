@@ -323,18 +323,22 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
     - key: node_roles
       prefix: ""
       separator: ""
+      leading_separator: false
+  groups:
+    data_disk: data_disk is defined
   ```
 
-  - Groups: the empty prefix and separator name each group after its role, so `--limit storage` and `hosts: storage` work.
-  - Schema: `node_roles` (not Ansible’s reserved `roles`) from the known set; exactly one `control_plane` host and one `backup` host; `data_disk` as shown; no other host keys (no IPs, R25).
+  - Groups: the empty prefix and separator, with `leading_separator: false`, name each group after its role (never `_<role>`), so `--limit storage` and `hosts: storage` work. `data_disk` is a constructed group of the hosts that declare one; it is not a role and gets no label.
+  - Schema: `node_roles` (not Ansible’s reserved `roles`) from the known set; exactly one `control_plane` host and one `backup` host; `data_disk` exactly `{id, wipe_confirmed}`; no other host keys (no IPs, R25).
   - Secrets: inventory and group_vars never need the age key. Secrets live only in SOPS files that bootstrap-secrets and Flux decrypt, never loaded through the community.sops vars plugin, so narrow runs work without the key (D17).
-  - Plays: base-os on `all`, node-disk on hosts with `data_disk`, the k3s server on `control_plane`, with `node-name` from `inventory_hostname`.
+  - Plays: base-os on `all`, node-disk on `data_disk`, the k3s server on `control_plane`, the k3s agent on `all:!control_plane`, then kubeconfig and flux-operator on `control_plane`; `node-name` comes from `inventory_hostname`.
+  - Join: every host that is not `control_plane` joins as a k3s agent; `workers`, `storage`, `backup`, `gpu` and `edge` are scheduling labels only, and the `control_plane` host runs the server only. An agent’s config sets `server: https://<control_plane inventory_hostname>:6443`, its own `node-name` and the token, with no `cluster-init` or `node-label`. The token is the server’s node-token, read by a `slurp` delegated to `control_plane` under `no_log`, so `--limit` runs still work; it is never in Git, the inventory, cluster-vars or SOPS (D17, R25).
   - Labels: `role.<dns_suffix>/<role>=true` for each role; the prefix is reserved for them. A task on `control_plane` sets them with kubernetes.core on every run and removes prefixed labels for dropped roles. No k3s `node-label`, which applies only at registration.
   - Edge: 80/443 (Traefik) and 53 (JARVIS DNS) land on the `edge` nodes, or on `control_plane` when none is edge. The same task reconciles servicelb’s `svccontroller.k3s.cattle.io/enablelb=true` label onto exactly that set on every run.
   - Asserts: roles are declared, never detected. Before any change, a `gpu` host must have an NVIDIA device. After node-disk and before k3s, a host with `data_disk` must have `/var/lib/jarvis` mounted as `jarvis-data`.
   - Disk: the data disk mounts at `/var/lib/jarvis` by `LABEL=jarvis-data` with `nofail`; k3s and images stay on root. Default layout: `local-path/`, `backup/etcd-snapshots/`, `backup/restic/`. Same-disk backups cover mistakes and rollback, not disk loss (R31).
   - Boot safety: node-disk adds a `k3s.service` drop-in with `RequiresMountsFor=` the configured `local_path_data` and `backup_path` (D3), so k3s never starts without the disk.
-  - Wipe safety (node-disk, before k3s first starts): refuse a missing disk, a partition, the root disk, a disk mounted elsewhere, or a second disk carrying the label. A `jarvis-data` disk is mounted, never wiped. Any other disk is wiped only with both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>`; otherwise the role stops and prints the disk’s model, size and partitions. It never mounts over a non-empty `/var/lib/jarvis`.
+  - Wipe safety (node-disk, before k3s first starts): refuse a missing disk, a partition, the root disk, a disk mounted elsewhere, or a second disk carrying the label. A `jarvis-data` disk is mounted, never wiped. Any other disk is wiped only with both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>`; `wipe_confirmed: true` alone never permits a wipe; otherwise the role stops and prints the disk’s model, size and partitions. It never mounts over a non-empty `/var/lib/jarvis`.
   - The by-id path holds the disk serial; that is accepted as low risk in a public repo.
   - env-01: bench.lan has `control_plane`, `workers`, `storage` and `backup`, and no `edge`. Its data disk is the 1 TB Corsair MP600 Mini, by its by-id path.
 - Reason: one block reads as the whole node, and the constructed config gives plays real groups without a second list. Fact asserts catch a wrong inventory without guessing roles. A label mount survives device renames. Two keys stop a stale flag or a copied env from wiping a disk.
@@ -355,9 +359,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D44
 
 - Decision: no environment-identity value appears in core, and each has one source.
-  - Sources: `tools/checks/core-names` reads them from every `envs/<env>` except env-00, a fixture excluded from every source: env names (the folder names), inventory hostnames, `ssh_user`, `dns_suffix`, and the repo slugs and owner handle in `flux_git_repo_url` and `apps_git_repo_url`. A new env is covered automatically. The owner’s personal name never lives in the repo; it comes from a GitHub Actions repo variable (an env var of the same name locally), and the check fails when it is unset in CI. The agent account is not repo config, so the repo never names it.
-  - Scan: `infra/`, `platform/`, `services/`, `tools/`, `docs/`, `.github/` except `CODEOWNERS`, every README and `rulebooks/`. Env names are allowed in `envs/**` and `docs/**`, the other values in `envs/<env>/`, and the personal name nowhere.
-  - Match: case-insensitive whole words, so a handle inside a URL is caught and a longer word is not. The repo matches as its slug, because the bare name is the product name. `ssh_user` matches only as `/home/<user>`, `<user>@<host>` or `~<user>`, so `ubuntu:26.04` passes. The check holds no values and no word lists.
+  - Sources: `tools/checks/core-names` reads them from every `envs/<env>` except env-00, a fixture excluded from every source: env names (the folder names), inventory hostnames, `ssh_user`, `dns_suffix`, and the owner handle in `flux_git_repo_url` and `apps_git_repo_url`. A new env is covered automatically. The owner’s personal name never lives in the repo; it comes from a GitHub Actions repo variable, not a secret (an env var of the same name locally), it matches only as the full name, and the check fails when it is unset in CI. The agent account is not repo config, so the repo never names it.
+  - Scan: `infra/`, `platform/`, `services/`, `tools/`, `docs/`, `.github/` except `CODEOWNERS`, every README and `rulebooks/`. Env names are allowed in `envs/**` and `docs/**`, the other values in `envs/<env>/`, and the personal name nowhere. Root files are not scanned, so the per-env `.sops.yaml` rules (D45) need no exemption.
+  - Match: case-insensitive whole words, so a handle inside a URL is caught and a longer word is not. Bare repo names are not identity values; a repo URL outside `envs/<env>/` fails on its owner handle. `ssh_user` matches only as `/home/<user>`, `<user>@<host>` or `~<user>`, so `ubuntu:26.04` passes. The check holds no values and no word lists.
   - Product rules in the same check: the word `bastion` and any hardcoded `/home/` path are banned.
   - Workflows name their own repo with `${{ github.repository }}` or local `./.github/` refs. admin-gate and the code-factory label-actor check trust the repository owner from the event (`github.repository_owner`) and check out no PR code.
   - The LAN domain is `dns_suffix`. Hostnames, Ingress, the wildcard cert and the label prefix `role.<dns_suffix>/` derive from it, and every selector on that prefix uses `${dns_suffix}` (D45).
@@ -371,7 +375,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - `apps_git_repo_url`: required and https, validated like `flux_git_repo_url`. It names the apps repo for app hosting and the code-factory. The owner handle in both URLs must match across all non-example envs, so a repo has one owner.
   - `llm_provider_host`: the AI provider’s API host, read by Hermes and the Gatus provider probe; the p2-18 drill overrides it.
   - Flux variables are the lowercase cluster-vars keys (`${dns_suffix}`), and lists are JSON strings. The FluxInstance turns on kustomize-controller’s `StrictPostBuildSubstitutions`, so a missing variable fails instead of going empty. A literal `${...}` that is not a cluster var (shell in ConfigMaps, dashboards, Gatus templates) is written `$${...}`.
-  - `.sops.yaml` has one age creation rule per env, keyed on `envs/<env>/`.
+  - `.sops.yaml` has one age creation rule per env, keyed on `envs/<env>/secrets/`.
   - Tools that act on one env (bootstrap-secrets, seal, the cluster-vars render) require `ENV=` or `--env` and fail without it. The stale-render check skips envs with no `flux/`.
   - The env schema CONTRACT.md has sections for node roles and labels (D42), identity values and product rules (D44), env-00 as the every-key reference, where a new key is set in env-00 in the same PR (D43), and cluster-vars to postBuild (this entry).
 - Reason: one source per value, loud failures instead of empty ones, and no tool that guesses the env.
