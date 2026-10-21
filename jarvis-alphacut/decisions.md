@@ -51,7 +51,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D7
 
 - Decision: §5 contract files live at these paths. Two contracts that share a folder are separate sections of that one `CONTRACT.md`. Component folders named in §6 still get their own `CONTRACT.md` when the component is built.
-  - Env schema and profile schema: `services/hermes/core/schema/CONTRACT.md`
+  - Env schema: `schema/CONTRACT.md` (repo-root `schema/` holds the env validator and its contract)
+  - Profile schema: its own `services/hermes/core/schema/CONTRACT.md`, created at `p2-04`
   - Code delivery provider: `docs/code-delivery/CONTRACT.md`
   - Build agent: `docs/build-agent/CONTRACT.md`
   - Exposure: `platform/traefik/CONTRACT.md` (cert-manager and lan-dns component contracts point at it)

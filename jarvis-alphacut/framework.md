@@ -403,6 +403,7 @@ jarvis/
   renovate.json
   docs/                        README.md (points to project-plans for the framework, plan and decisions; never copies them), CONTRACT.template.md, code-delivery/CONTRACT.md (provider contract; github only), build-agent/CONTRACT.md (agent contract; cursor only)
   rulebooks/coding-agents.md
+  schema/                      env schema: the validator for every env, its tests and CONTRACT.md (D7)
   tools/                       render-profiles, bootstrap-secrets, seal, google-consent, hermes-backup, checks/ (one script per CI rule, including admin-gate), verify/ (one short checklist per phase)
   infra/                       layer 1: nodes (Ansible only)
     inventory/roles.yml        the one constructed config that turns node_roles into groups (D42)
@@ -418,7 +419,7 @@ jarvis/
     observability/             victoria-metrics, victoria-logs, fluent-bit, vmagent, grafana/{dashboards,alerts}, gatus
     hermes/
       core/                    base/ (Kustomize), config/ (defaults, write_approval, toolset policy),
-                               skills/ (geo/: in-repo read-only MCP server), glue/ (render lib, startup sync), schema/ (profile, env),
+                               skills/ (geo/: in-repo read-only MCP server), glue/ (render lib, startup sync), schema/ (profile schema and its CONTRACT.md),
                                templates/profile/, testing/ (mock MCP, grader), CONTRACT.md
       deploy/ops/              overlay of core/base; profiles/{concierge,inbox,homelab}/{SOUL.md,profile.yaml,skills/,evals/}
       deploy/code-factory/     overlay of core/base; profiles/{foreman,spec-writer}/; lanes/{builder,checker}/, lanes/agents/cursor.sh (build agent adapter);

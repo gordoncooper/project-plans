@@ -74,8 +74,8 @@ Goal:        Write the Env schema CONTRACT.md from the shared template, with pro
 Why:         P0a is env values before any manifest (R3, R4). The contract is written before the validator (§5, §11).
 Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class).”
 Depends on:  none
-Touches:     docs/CONTRACT.template.md, services/hermes/core/schema/CONTRACT.md
-Hard limits: R3; R4; R23 (tiers and model names only under envs/). Allowed code_delivery is github and allowed build_agent is cursor (§5). The time zone is part of the env schema. env-01 runs on America/Los_Angeles, and the node and the Hermes schedules both use it. The schema includes ssh_user, the node SSH login, default ubuntu (D34). Gordon creates jarvis and jarvis-apps under gordoncooper before this PR writes to jarvis (D1). D7. Profile schema is a later section of this file (p2-04).
+Touches:     docs/CONTRACT.template.md, schema/CONTRACT.md
+Hard limits: R3; R4; R23 (tiers and model names only under envs/). Allowed code_delivery is github and allowed build_agent is cursor (§5). The time zone is part of the env schema. env-01 runs on America/Los_Angeles, and the node and the Hermes schedules both use it. The schema includes ssh_user, the node SSH login, default ubuntu (D34). Gordon creates jarvis and jarvis-apps under gordoncooper before this PR writes to jarvis (D1). D7. The profile schema is its own file, services/hermes/core/schema/CONTRACT.md (p2-04).
 Done checks: The file has offers, expects, health, config, and proven by, and the schema includes the time zone and ssh_user. One PR.
 Proven by:   Env schema validation in CI, and the P0a seeded unknown code_delivery or build_agent value.
 ```
@@ -133,7 +133,7 @@ Goal:        Implement the env schema validator and seed one PR with an unknown 
 Why:         Fix order (§11): the schema is the boundary; CI only runs it. This is the code that makes the easy values the legal values (R4).
 Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class).”
 Depends on:  p0a-01, p0a-03, p0a-06
-Touches:     services/hermes/core/schema/, tools/checks/env-schema
+Touches:     schema/, tools/checks/env-schema
 Hard limits: R3; R4; R10 (Python). D3; D34; D45. Validates cluster-vars.yaml, hermes.yaml, apps.yaml, and inventory/hosts.yml for every env (§5). Gordon sets branch protection requiring ci after p0a-06 merges, before the seeded PR. Unknown code_delivery or build_agent fails. dns_suffix, flux_git_repo_url and apps_git_repo_url are required. The defaults for ssh_user, local_path_data and backup_path live only here. Core naming an env, a model, or a DNS suffix is p0a-07. The per-node inventory shape is p0a-11a.
 Done checks: pytest covers a valid env-01, a bad build_agent, and ssh_user defaulting to ubuntu. A seeded PR that sets code_delivery to a value other than github fails ci. One PR.
 ```
@@ -144,7 +144,7 @@ Goal:        Add envs/env-00, the never-deployed 7-node example env that sets ev
 Why:         Core is proven against a multi-node env, not only the one-node env-01 (R3).
 Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class).”
 Depends on:  p0a-05
-Touches:     envs/env-00/, services/hermes/core/schema/ (tests, CONTRACT.md)
+Touches:     envs/env-00/, schema/ (tests, CONTRACT.md)
 Hard limits: R3; R4; R25. D43; D44. Invented values only; nothing copied from env-01. No secrets/ or flux/. This PR adds the env-00 section to the env schema CONTRACT.md (D45).
 Done checks: ci validates env-00. A behavior test fails when the schema allows a key env-00 does not set. One PR.
 ```
@@ -199,7 +199,7 @@ Goal:        Declare each node’s roles and optional data disk in inventory/hos
 Why:         Roles decide where each play runs, and one block per node holds them (R3).
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-05a
-Touches:     envs/env-01/inventory/hosts.yml, envs/env-00/inventory/hosts.yml, infra/inventory/roles.yml, services/hermes/core/schema/ (validator, CONTRACT.md)
+Touches:     envs/env-01/inventory/hosts.yml, envs/env-00/inventory/hosts.yml, infra/inventory/roles.yml, schema/ (validator, CONTRACT.md)
 Hard limits: R3; R4; R25. D42 (shape, schema rules, constructed config); D43. infra/inventory/roles.yml is the one constructed config, passed as a second -i and never copied into an env. This PR adds the node roles and labels section to the env schema CONTRACT.md (D45).
 Done checks: Behavior tests show the schema rejects an unknown role, an env without exactly one control_plane or exactly one backup host, an unknown host key, and a data disk id that is not a whole-disk /dev/disk/by-id path. In ci, ansible-inventory --graph on env-00 shows each role and data_disk as a group, with no leading underscore. One PR.
 ```
@@ -629,13 +629,13 @@ Proven by:   The P2 fallback check, Gatus provider reachability, and the R23 CI 
 
 ```text
 ID:          p2-04
-Goal:        Add the Profile schema section to the schema CONTRACT.md with proven by.
+Goal:        Write the Profile schema CONTRACT.md, its own file, with proven by.
 Why:         A bot is a profile.yaml, validated before the three profiles are added (R19, §5).
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
 Depends on:  p2-01, p0a-01
 Touches:     services/hermes/core/schema/CONTRACT.md
 Hard limits: R19; R21; R23. Fields: job, toolsets with reasons and read/write tags, cron, evals, telegram true/false with allow-list required when true. Names that collide with status, cron, memory, or skills are rejected. Tiers come from the env bot tier map, not from the profile.
-Done checks: The profile section has offers, expects, health, config, and proven by. One PR.
+Done checks: The profile schema CONTRACT.md has offers, expects, health, config, and proven by. One PR.
 Proven by:   CI validation of profile.yaml (§5) and the three P2 bots loading.
 ```
 
