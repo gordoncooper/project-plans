@@ -103,7 +103,7 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Depends on:  p0a-01, p0a-02
 Touches:     jarvis Makefile, docs/README.md, .sops.yaml, envs/env-01/, rulebooks/ left for p0a-17
 Hard limits: R3; R10; R25 (hostnames only; the age public key is the recipient Gordon provides). D1; D2. Create only paths this checkpoint uses. Hermes deploy folders, app-hosting, and observability wait for their phases. docs/README.md points at project-plans and does not copy the framework (§6).
-Done checks: cluster-vars.yaml sets code_delivery: github, build_agent: cursor, DNS suffix alpha.lan, time zone America/Los_Angeles, the §7 retention, and the §7 env-01 memory budgets and headroom. hermes.yaml holds the §7 tier map and an empty bot list. apps.yaml has app hosting off. inventory/hosts.yml lists bench.lan (D2). envs/env-01/README.md states purpose, what deploys, and promotion. One PR.
+Done checks: cluster-vars.yaml sets code_delivery: github, build_agent: cursor, DNS suffix alpha.lan, time zone America/Los_Angeles, and the §7 retention. hermes.yaml holds the §7 tier map and an empty bot list. apps.yaml has app hosting off. inventory/hosts.yml lists bench.lan (D2). envs/env-01/README.md states purpose, what deploys, and promotion. One PR.
 Timebox:     6h
 ```
 
@@ -138,8 +138,8 @@ Why:         Fix order (§11): the schema is the boundary; CI only runs it. This
 Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
 Depends on:  p0a-01, p0a-03, p0a-06
 Touches:     services/hermes/core/schema/, tools/checks/env-schema
-Hard limits: R3; R4; R10 (Python). Validates cluster-vars.yaml, hermes.yaml, apps.yaml, and inventory/hosts.yml (§5). Memory budgets and the headroom target are schema fields whose defaults are the full-cluster §7 numbers (D30). Gordon sets branch protection requiring ci after p0a-06 merges, before the seeded PR. Unknown code_delivery or build_agent fails. A missing ssh_user means ubuntu (D34). Core naming an env, a model, or a DNS suffix is p0a-07.
-Done checks: pytest covers a valid env-01, a bad build_agent, a malformed memory budget, and ssh_user defaulting to ubuntu. A seeded PR that sets code_delivery to a value other than github fails ci. One PR.
+Hard limits: R3; R4; R10 (Python). Validates cluster-vars.yaml, hermes.yaml, apps.yaml, and inventory/hosts.yml (§5). Gordon sets branch protection requiring ci after p0a-06 merges, before the seeded PR. Unknown code_delivery or build_agent fails. A missing ssh_user means ubuntu (D34). Core naming an env, a model, or a DNS suffix is p0a-07.
+Done checks: pytest covers a valid env-01, a bad build_agent, and ssh_user defaulting to ubuntu. A seeded PR that sets code_delivery to a value other than github fails ci. One PR.
 Timebox:     6h
 ```
 
@@ -199,7 +199,7 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0a-05, p0a-11
 Touches:     envs/env-01/values/nodes.yaml, services/hermes/core/schema/, infra/ansible/roles/node-disk, infra/ansible/site.yml
-Hard limits: R1; R3; R4; R31. D3; D42. node-disk runs after base-os and before k3s. The disk is named by a stable /dev/disk/by-id path, never a kernel name. Ansible refuses to wipe without both the committed confirm flag and a matching run-time confirmation, and never touches a disk that holds the root filesystem or is mounted. A disk already marked as this env’s Jarvis data disk is mounted, never wiped. local_path_data and backup_path do not change: they sit under the data mount, or on the root disk when a node has none. Only one server node (control-plane) is built; other roles are labels, which p0a-12 writes into the k3s config.yaml.
+Hard limits: R1; R3; R4; R31. D3; D42 (shape, roles, disk layout and safety rules). node-disk runs after base-os and before k3s first starts; p0a-12 writes the role labels into the k3s config.yaml.
 Done checks: The env schema rejects an unknown role, a node not in the inventory, a data disk without a by-id path, and an env without exactly one control-plane node (small tests). A narrow node-disk run without the run-time confirmation stops before touching the disk and prints its model, size and partitions (no age key needed). Gordon’s first live site.yml (p0a-14, an owner run) wipes and mounts the data disk before k3s starts, and his second changes nothing. One PR.
 Timebox:     6h
 ```
@@ -469,7 +469,7 @@ Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert wi
 Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
 Depends on:  p0b-11
 Touches:     services/observability/CONTRACT.md
-Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 100% less the env headroom (70% on env-01), node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18).
+Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 80%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18).
 Done checks: The Login section and the Alert path section each have offers, expects, health, config, and proven by. One PR.
 Timebox:     6h
 Proven by:   The R27 CI check and the P2 dashboard-login check (§5). Grafana anonymous-off is the P1 half. The P1 kill-endpoint alert, the lowered-threshold alerts, and the backup-failure alert.
@@ -569,8 +569,8 @@ Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert wi
 Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
 Depends on:  p1-09
 Touches:     services/observability/grafana/alerts/
-Hard limits: R8; §7 (disk at 80% full, node memory at 100% less the env headroom: 70% on env-01). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept.
-Done checks: The verify log shows each rule firing under the lowered threshold and the committed rules back at 80% and 70%. One PR.
+Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept.
+Done checks: The verify log shows each rule firing under the lowered threshold and the committed rules back at 80%. One PR.
 Timebox:     6h
 ```
 

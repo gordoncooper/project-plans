@@ -222,8 +222,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D30
 
-- Decision: container memory stays inside the env’s budgets (framework §7), set in `cluster-vars.yaml` and schema-validated. The numbers here are the schema defaults for the full cluster; env-01 sets Hermes ops 1.5Gi request with a 2Gi limit, Hermes code-factory 512Mi with a 1Gi limit, and a platform total near 1.5Gi, so it fits 14 GiB with ≥30% free. Default starting requests: VictoriaMetrics 512Mi, VictoriaLogs 512Mi, Grafana 256Mi, Gatus 128Mi, Fluent Bit 64Mi, vmagent 128Mi, node-exporter 64Mi, kube-state-metrics 64Mi, Hermes ops 2Gi with a 3Gi limit, Hermes code-factory 1Gi with a 2Gi limit, each platform container 128Mi request and 256Mi limit. A platform container may be raised only while the platform total stays near 2Gi. Every container has a CPU request and no CPU limit.
-- Reason: R5 requires numbers and §7 gives budgets, not per-container sizes. One fixed budget cannot fit both a small test node and the full cluster, so sizes are env values (R3).
+- Decision: every container starts from these memory requests and is tuned from Grafana as real usage shows up: VictoriaMetrics 512Mi, VictoriaLogs 512Mi, Grafana 256Mi, Gatus 128Mi, Fluent Bit 64Mi, vmagent 128Mi, node-exporter 64Mi, kube-state-metrics 64Mi, Hermes ops 2Gi with a 3Gi limit, Hermes code-factory 1Gi with a 2Gi limit, each platform container 128Mi request and 256Mi limit. Every container has a memory request and limit and a CPU request, and no CPU limit.
+- Reason: R5 requires numbers; real usage, not up-front calculation, sets the final sizes.
 - Where: every manifest task.
 - Status: accepted-with-plan default.
 
@@ -306,21 +306,21 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D42
 
-- Decision: node roles and disks are env values in a new `envs/<env>/values/nodes.yaml`, validated by the env schema and read by Ansible only (not rendered into the Flux cluster-vars ConfigMap). Shape:
+- Decision: node roles and the optional data disk live in `envs/<env>/values/nodes.yaml`, schema-validated and read by Ansible only:
 
   ```yaml
   nodes:
-    bench.lan:                         # key must be an inventory host
+    bench.lan:                         # an inventory host
       roles: [control-plane, worker, storage, backup]   # allowed: control-plane, worker, storage, backup, gpu
       data_disk:                       # optional; omit it and data stays on the root disk
         id: /dev/disk/by-id/<stable id>   # never /dev/nvmeXnY
-        wipe_confirmed: true           # committed intent; the PR is reviewed by Gordon
+        wipe_confirmed: true
   ```
 
-  - Roles: exactly one `control-plane` (the k3s server with `--cluster-init`; joining more servers or agents is built when a second node exists). Each role becomes a node label `role.jarvis.lan/<role>=true` through k3s `node-label` in `config.yaml` before k3s first starts, since k3s applies it only when a node registers (one key per role, since a node can hold several). `storage` marks nodes that may hold local-path volumes, `backup` the node whose `backup_path` holds the restic repository and etcd snapshots (exactly one per env for now), and `gpu` is a label only until §9 local models arrive.
-  - Disks: a node with `data_disk` gets it at `/var/lib/jarvis`, so `local_path_data` and `backup_path` (D3) do not change, and k3s, local-path and VolSync need no new settings. The k3s data dir and container images stay on the root disk. A node without `data_disk` uses the same paths on the root disk.
-  - Ansible (`node-disk` role, after base-os and before k3s first starts, so nothing has written under `/var/lib/jarvis` yet): resolve the by-id path and refuse if it is missing, holds the root filesystem, or is mounted. If the disk already carries this env’s Jarvis mark (filesystem label `jarvis-data` and `/var/lib/jarvis/.jarvis-env` holding the env name), mount it by UUID and change nothing else, so the second run is `changed=0`. Otherwise wipe only when `wipe_confirmed: true` and the operator passes the run-time confirmation `-e jarvis_wipe_confirm=<node>:<disk id>`; with either one missing, stop and print the disk’s model, size and partitions. A wipe makes one GPT partition, ext4 with label `jarvis-data`, an fstab entry by UUID, and the mark file. Ansible refuses to mount over a non-empty `/var/lib/jarvis` on the root disk; moving existing data is a manual step (or a rebuild).
-  - env-01: bench.lan holds every role, with `data_disk` set to the 1 TB Corsair MP600 Mini by its by-id path, read from bench.lan (`ls -l /dev/disk/by-id/`). Gordon confirms it may be wiped at the wipe-and-rebuild. The 100 GB root keeps the OS, k3s and images.
-- Reason: Gordon (2026-10-20) wants disks and node roles as env config, root paths or a secondary disk per node, with a secondary disk wiped only after confirmation, so multi-node envs where only some nodes have a second disk work. Keeping the mount at the D3 paths means nothing above Ansible changes. Two keys (a committed flag plus a run-time confirmation) keep a stale flag or a copied env from wiping a disk.
-- Where: `p0a-11a`, before `p0a-12` (k3s); framework §6 lists `values/nodes.yaml` and the `role.jarvis.lan/<role>=true` labels.
+  - Roles: exactly one `control-plane` (the k3s server) and exactly one `backup` node. Each role becomes `role.jarvis.lan/<role>=true` through k3s `node-label` in `config.yaml` at first start, since k3s applies labels only when a node registers.
+  - Disk: the data disk mounts at `/var/lib/jarvis`, so the D3 paths do not change; without one, the same paths sit on the root disk. k3s and images stay on root. Layout: `local-path/` (PVC volumes), `backup/etcd-snapshots/`, `backup/restic/` (VolSync repositories), `.jarvis-env` (the mark). Backups on the same disk cover mistakes and rollback, not disk loss; off-site is deferred (R31).
+  - Safety (`node-disk` role, after base-os, before k3s first starts): refuse a missing, root or mounted disk. A disk with this env’s mark (label `jarvis-data` plus `.jarvis-env`) is mounted, never wiped. Otherwise wipe only with both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>`; with either missing, stop and print the disk’s model, size and partitions. Never mount over a non-empty `/var/lib/jarvis`.
+  - env-01: bench.lan holds every role; its data disk is the 1 TB Corsair MP600 Mini, by the by-id path read from bench.lan. Gordon confirms it may be wiped at the wipe-and-rebuild.
+- Reason: Gordon (2026-10-20) wants roles and disks as per-node env config for future multi-node envs, with a secondary disk wiped only after confirmation. Two keys keep a stale flag or a copied env from wiping a disk.
+- Where: `p0a-11a`, before `p0a-12` (k3s); framework §6.
 - Status: Accepted by Gordon 2026-10-20.
