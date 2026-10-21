@@ -1,6 +1,6 @@
 # JARVIS AlphaCut — Plan
 
-Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves open are in jarvis-alphacut/decisions.md and cited here as D numbers. One PR per task.
+Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves open are in jarvis-alphacut/decisions.md and cited here as D numbers. One PR per task. Timeboxes are upper bounds, not estimates; most tasks need far less. Done checks follow the framework §11 lean standard: the live run is the proof where there is one.
 
 ## Stop and ask
 
@@ -25,7 +25,8 @@ One list, from §8. Each action names the task that waits on it.
 - P0: wipe the env-01 node (a separate spare compute node; never a node of the previous system). Task: p0a-12.
 - P0: fresh-install Ubuntu 26.04 Server (minimal install) with Gordon’s SSH key on the env’s SSH user (ssh_user, default ubuntu; D34). Task: p0a-12.
 - P0: set a DHCP reservation. Task: p0a-12.
-- P0: run the first site.yml from the bastion. Task: p0a-14.
+- P0: run the first site.yml, then the second site.yml and the second make bootstrap-secrets, from the controller (each needs the age key, so these are owner runs). Task: p0a-14.
+- P0: for a node with a secondary data disk, record its stable disk id in nodes.yaml and confirm the wipe at run time (D42). Task: p0a-11a.
 - P0: once JARVIS DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
 - P0: trust the root cert on each device. Task: p0b-08.
 - P1: create the send-only alerts bot with BotFather. Task: p1-09.
@@ -54,7 +55,7 @@ One list, from §8. Each action names the task that waits on it.
 - Standing: review PRs held by admin-gate and add admin-approved from his own account. Task: p2-24 (also any later protected PR, including p4a-05, p4a-07, p4b-01, p4b-15).
 - Standing: merge Hermes bump PRs (R33). Task: p2-20.
 - Standing: re-run site.yml after merging an infra/ PR. Task: p0a-13.
-- Standing: reboot the node after kernel security updates. Task: p0a-11.
+- Standing: run OS package upgrades by hand (Ubuntu never upgrades itself) and reboot after kernel updates. Task: p0a-11.
 - Standing: keep the previous system frozen (no new work, but not shut down, wiped or destroyed). Task: p0a-01.
 - §8 secrets: home location (rounded to 2 decimals) and Gordon’s contact email, SOPS env value for the geo User-Agent. Task: p2-11.
 - §8 custody: after a Hermes volume restore, Gordon redoes the xAI device login if the token is stale. Task: p2-21.
@@ -70,7 +71,7 @@ Goal: Git drives the cluster from a blank node, with CI rule checks, secrets and
 ID:          p0a-01
 Goal:        Write the Env schema CONTRACT.md from the shared template, with proven by.
 Why:         P0a is env values before any manifest (R3, R4). The contract is written before the validator (§5, §11).
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
 Depends on:  none
 Touches:     docs/CONTRACT.template.md, services/hermes/core/schema/CONTRACT.md
 Hard limits: R3; R4; R23 (tiers and model names only under envs/). Allowed code_delivery is github and allowed build_agent is cursor (§5). The time zone is part of the env schema. env-01 runs on America/Los_Angeles, and the node and the Hermes schedules both use it. The schema includes ssh_user, the node SSH login, default ubuntu (D34). Gordon creates jarvis and jarvis-apps under gordoncooper before this PR writes to jarvis (D1). D7. Profile schema is a later section of this file (p2-04).
@@ -83,7 +84,7 @@ Proven by:   Env schema validation in CI, and the P0a seeded unknown code_delive
 ID:          p0a-02
 Goal:        Write the Code delivery provider CONTRACT.md for the six capabilities, GitHub only, with proven by.
 Why:         Services, the code-factory, and app hosting depend on this contract and not on GitHub by name (§5, R34).
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
 Depends on:  p0a-01
 Touches:     docs/code-delivery/CONTRACT.md
 Hard limits: R34; R36 (admin-gate is named here and enforced at the P2 exit). Forgejo stays a §9 seam: this contract names it as the planned second provider and adds no Forgejo code. D7.
@@ -113,8 +114,8 @@ Why:         Git has to hold the §8 bootstrap secrets before Flux can decrypt o
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-03
 Touches:     tools/bootstrap-secrets, tools/seal, Makefile
-Hard limits: R7; R25; R35. The script creates the internal CA, the VolSync restic password, the Grafana admin password, and each deploy’s Hermes API key, dashboard password hash, and signing secret (D16). It never overwrites. The real age private key stays out of CI (D33). D10: only the restic secret is referenced in-cluster at P0a.
-Done checks: A unit test with a throwaway age key shows a second run leaves the files byte-identical. Gordon runs make bootstrap-secrets on the bastion and commits the SOPS output (see Gordon-only actions). One PR.
+Hard limits: R7; R25; R35. The script creates the internal CA, the VolSync restic password, the Grafana admin password, and each deploy’s Hermes API key, dashboard password hash, and signing secret (D16). It never overwrites. The real age private key stays out of CI (D33). D10: only the restic secret is referenced in-cluster at P0a. There is no default env: with one env under envs/ both tools pick it, and once there are two, ENV= (or --env) is required.
+Done checks: A unit test with a throwaway age key shows a second run leaves the files byte-identical. Gordon runs make bootstrap-secrets on the controller and commits the SOPS output (see Gordon-only actions). One PR.
 Timebox:     6h
 ```
 
@@ -122,7 +123,7 @@ Timebox:     6h
 ID:          p0a-06
 Goal:        Add the required ci workflow, the gitleaks secret scan, a seeded plaintext secret, and a green jarvis-apps ci.
 Why:         P0a’s required check is ci, and §4 names the pinned gitleaks CLI as the CI secret scan (R25, §8 phase 0 order).
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
 Depends on:  p0a-03
 Touches:     jarvis/.github/workflows/ci.yml, tools/checks/secret-scan, jarvis-apps/.github/workflows/ci.yml
 Hard limits: R25; R36 (admin-gate is not part of ci; it joins at the P2 exit). The secret scan is the pinned gitleaks CLI (§4). jarvis-apps ci runs on pull_request and holds no secrets (D35). Workflows that would hold secrets do not run on fork PRs. D1; D35.
@@ -134,7 +135,7 @@ Timebox:     6h
 ID:          p0a-05
 Goal:        Implement the env schema validator and seed one PR with an unknown provider value.
 Why:         Fix order (§11): the schema is the boundary; CI only runs it. This is the code that makes the easy values the legal values (R4).
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
 Depends on:  p0a-01, p0a-03, p0a-06
 Touches:     services/hermes/core/schema/, tools/checks/env-schema
 Hard limits: R3; R4; R10 (Python). Validates cluster-vars.yaml, hermes.yaml, apps.yaml, and inventory/hosts.yml (§5). Gordon sets branch protection requiring ci after p0a-06 merges, before the seeded PR. Unknown code_delivery or build_agent fails. A missing ssh_user means ubuntu (D34). Core naming an env, a model, or a DNS suffix is p0a-07.
@@ -145,11 +146,11 @@ Timebox:     6h
 ```text
 ID:          p0a-07
 Goal:        Add the core-names check and seed a PR that hardcodes a DNS suffix.
-Why:         Core stays env-agnostic only if CI rejects an env name, a model name, or a DNS suffix in core (R3).
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
+Why:         Core stays env-agnostic only if CI rejects an env name or a DNS suffix in core (R3). Model names join this check at p2-23, when the env model maps hold names.
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
 Depends on:  p0a-06
 Touches:     tools/checks/core-names
-Hard limits: R3; R28. envs/ is the only place those strings are legal. The check allows the examples inside envs/env-01.
+Hard limits: R3; R28. envs/** and docs/** are exempt; contracts use placeholders such as <env> and <dns_suffix>. The check also rejects inventory hostnames, ssh_user logins, home-directory paths and controller or owner account names outside envs/, so core works from any controller.
 Done checks: A seeded PR that writes alpha.lan under platform/ or services/ fails ci. One PR.
 Timebox:     4h
 ```
@@ -158,7 +159,7 @@ Timebox:     4h
 ID:          p0a-08
 Goal:        Add the CONTRACT.md check and seed a PR that drops one.
 Why:         Fix order (§11): the folder layout is the boundary (R2); this script only reports a missing contract. D8 defines which folders count.
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
 Depends on:  p0a-06, p0a-01
 Touches:     tools/checks/contract-md
 Hard limits: R2; D8. The seeded folder is a throwaway component root on the §6 list, removed when the PR closes.
@@ -167,38 +168,39 @@ Timebox:     4h
 ```
 
 ```text
-ID:          p0a-09
-Goal:        Add the PVC backup-entry check and seed a PVC with no entry.
-Why:         Every PVC needs a VolSync entry or backup: none before any real volume exists (R31). Observability volumes are the only backup: none users, and they are not in this seed.
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
-Depends on:  p0a-06
-Touches:     tools/checks/pvc-backup
-Hard limits: R31. backup: none is rejected outside the observability allow-list.
-Done checks: A seeded PR with a PVC that has neither a backup entry nor backup: none fails ci. One PR.
-Timebox:     4h
-```
-
-```text
 ID:          p0a-10
-Goal:        Add the Cursor CLI deny list so agents change the cluster only through Git.
+Goal:        Add the Cursor CLI deny list and its rule check, so agents change the cluster only through Git.
 Why:         Fix order (§11): the deny list is the automated guard for R34. The rulebook comes after the checks (p0a-17) and does not repeat this list.
-Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
-Depends on:  p0a-03
-Touches:     .cursor/cli.json
-Hard limits: R34. Deny direct kubectl writes, helm, ssh, and secret decryption. Reads used by make verify stay allowed.
-Done checks: A dry-run of the deny list shows kubectl apply, helm, ssh, and sops decrypt blocked. One PR.
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
+Depends on:  p0a-06
+Touches:     .cursor/cli.json, tools/checks/cli-deny
+Hard limits: R34. Deny direct kubectl and flux writes, helm, ssh, secret decryption, and reading the age private key. Reads stay allowed. The list is a guardrail, not a hard boundary (shell wrappers can bypass it), so keep patterns narrow enough not to block reads, and never pass --force or --yolo (P4b adapter).
+Done checks: tools/checks/cli-deny prints one dry-run table showing kubectl apply, helm, ssh, sops decrypt and an age-key read blocked and kubectl get allowed. A seeded PR that removes a whole deny class (Example: the age-key read deny) fails ci. One PR.
 Timebox:     4h
 ```
 
 ```text
 ID:          p0a-11
-Goal:        Add the Ansible base-os role: journald cap, chrony with NTS, unattended security upgrades, no auto-reboot.
+Goal:        Add the Ansible base-os role: journald cap, chrony with NTS, the time zone, and no automatic upgrades or reboots.
 Why:         The blank node has to match the §4 OS before k3s is installed (R1, R10).
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-03
-Touches:     infra/ansible/roles/base-os, infra/ansible/ansible.cfg
-Hard limits: R1 (Ansible only in infra/); R10; §4 Ubuntu 26.04 minimal. journald SystemMaxUse 2G (§7). The node time zone is America/Los_Angeles from the env schema, the same value the Hermes schedules use. Outbound 123/udp and 4460/tcp stay available for chrony. Reboots after kernel updates stay Gordon’s (§8). No Tailscale or VPN on the node (R28).
-Done checks: ansible-playbook --syntax-check site.yml passes. The role sets journald, chrony, unattended upgrades, and the time zone America/Los_Angeles, and does not reboot. One PR.
+Touches:     infra/ansible/roles/base-os, infra/ansible/ansible.cfg, infra/ansible/site.yml
+Hard limits: R1 (Ansible only in infra/); R10; §4 Ubuntu 26.04 minimal. journald SystemMaxUse 2G (§7). The node time zone comes from the env schema, the same value the Hermes schedules use. Ubuntu never upgrades itself: unattended-upgrades and the apt-daily-upgrade timer are off, and the package-list refresh stays on. Our tooling may install packages. Upgrades and reboots stay Gordon’s (§8). Outbound 123/udp and 4460/tcp stay available for chrony. Config files use Ansible validate: where the tool can check its own file, rather than block/rescue. Ansible is the pinned PyPI ansible package (it bundles community.general; ansible-core alone is not enough). No Tailscale or VPN on the node (R28).
+Done checks: ansible-playbook --syntax-check site.yml passes. Small tests assert the rules in the rendered files (journald cap, NTS pools, automatic upgrades off). The first live site.yml (p0a-14) is the proof for the running services: chronyc -N authdata shows NTS, and no upgrade timer is active; a container cannot prove chrony (it needs CAP_SYS_TIME and outbound NTS). One PR.
+Timebox:     6h
+```
+
+```text
+ID:          p0a-11a
+Goal:        Declare each node’s roles and optional data disk in env values, and have Ansible prepare the disk before k3s first starts (D42).
+Why:         k3s, its etcd snapshots, volumes and backups write under /var/lib/jarvis, and k3s applies node labels only when a node first registers, so disks and roles come before k3s (R3, R31).
+Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
+Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
+Depends on:  p0a-05, p0a-11
+Touches:     envs/env-01/values/nodes.yaml, services/hermes/core/schema/, infra/ansible/roles/node-disk, infra/ansible/site.yml
+Hard limits: R1; R3; R4; R31. D3; D42 (shape, roles, disk layout and safety rules). node-disk runs after base-os and before k3s first starts; p0a-12 writes the role labels into the k3s config.yaml.
+Done checks: The env schema rejects an unknown role, a node not in the inventory, a data disk without a by-id path, and an env without exactly one control-plane node (small tests). A narrow node-disk run without the run-time confirmation stops before touching the disk and prints its model, size and partitions (no age key needed). Gordon’s first live site.yml (p0a-14, an owner run) wipes and mounts the data disk before k3s starts, and his second changes nothing. One PR.
 Timebox:     6h
 ```
 
@@ -208,10 +210,10 @@ Goal:        Add the k3s role: config.yaml, fixed CIDRs, secrets encryption, res
 Why:         Phase 0 installs k3s from config.yaml because Ubuntu sudo-rs drops INSTALL_K3S_* (§8, R1).
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
-Depends on:  p0a-11
+Depends on:  p0a-11a
 Touches:     infra/ansible/roles/k3s, envs/env-01/values/cluster-vars.yaml
-Hard limits: R1; §7 (kube and system reserves about 1 GB each, eviction thresholds); R28; R31; R33. D2; D3; D4; D5; D6; D34. The k3s version is pinned in cluster-vars.yaml and changes only by PR. Renovate does not manage it. Ansible logs in as ssh_user and runs every task as root with become (D34). site.yml refuses a host that already runs k3s unless /etc/jarvis/env=env-01. The first run writes that marker. kubeconfig is written for both bastion users. The node is the spare env-01 box, wiped and freshly installed by Gordon before this role runs.
-Done checks: A local render of config.yaml contains --cluster-init, secrets encryption, the CIDRs, the snapshot directory, and no INSTALL_K3S_* variable. One PR.
+Hard limits: R1; §7 (kube and system reserves about 1 GB each, eviction thresholds); R28; R31; R33. D2; D3; D4; D5; D6; D34. The k3s version and binary checksum are pinned in cluster-vars.yaml and change only by PR. Renovate does not manage them. Ansible logs in as ssh_user and runs every task as root with become (D34). site.yml refuses a host that already runs k3s unless /etc/jarvis/env holds this env’s name; the first run writes that marker. site.yml writes the kubeconfig only to the running user’s ~/.kube/config; copying it to another controller user is a controller setup step outside the repo. The node is the spare env-01 box, wiped and freshly installed by Gordon before this role runs.
+Done checks: A small test of the rendered config.yaml shows --cluster-init, secrets encryption, the CIDRs, the reserves, the snapshot directory, the node-label entries from nodes.yaml (role.jarvis.lan/<role>=true, D42), and no INSTALL_K3S_* variable. One container test, on the node OS image (ubuntu:26.04), shows site.yml refuses a host that runs k3s without the marker (the only safe proof of that guard); the first live site.yml proves the fresh-node path. One PR.
 Timebox:     8h
 ```
 
@@ -222,8 +224,8 @@ Why:         The age key and the first Flux apply are the bootstrap bridge (R1, 
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-12, p0a-04
 Touches:     infra/ansible/roles/flux-operator, infra/ansible/site.yml
-Hard limits: R1; R25. The private age key is applied once as flux-system/sops-age, which Flux never reconciles. Gordon’s bastion user runs site.yml, not the agent user. site.yml sets ansible_user from cluster-vars ssh_user, default ubuntu, and become: true (D34).
-Done checks: site.yml contains the three roles in §8 order (base-os, k3s, flux-operator) and is idempotent in check mode against a fixture. One PR.
+Hard limits: R1; R25. The private age key is applied once as flux-system/sops-age, which Flux never reconciles, with no_log on every task that handles it. A full site.yml needs SOPS_AGE_KEY_FILE, so it is an owner run by Gordon; the agent user never holds the age key. The agent user keeps SSH to the node only for narrow runs that need no age key (for example site.yml --tags kubeconfig). site.yml sets ansible_user from cluster-vars ssh_user and become: true (D34). The operator chart pin in the role and in Git have one source of truth, so Renovate bumps both.
+Done checks: site.yml runs the four roles in §8 order (base-os, node-disk, k3s, flux-operator). Gordon’s first and second live site.yml (p0a-14) prove the apply and its idempotence; no container re-run of this role. One PR.
 Timebox:     6h
 ```
 
@@ -235,32 +237,32 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Advances:    P0a exit check: “A SOPS-encrypted secret decrypts in-cluster.”
 Depends on:  p0a-13, p0a-02, p0a-08
 Touches:     envs/env-01/flux/, platform/flux-operator/, platform/backups/ namespace only
-Hard limits: R1; R4 (cluster-vars through postBuild substitution only); R25. D9; D10; D11 (the chart pin is one release behind). Resources that use their own ${…} syntax set substitute: disabled. No hand-edited cluster state (R34).
-Done checks: After Gordon’s first site.yml, every Flux object reports Ready and the restic Secret exists in platform-backups with its value unprinted. A second site.yml and a second bootstrap-secrets change nothing (Gordon attaches both outputs, D17). One PR.
+Hard limits: R1; R4 (cluster-vars through postBuild substitution only); R25. D9 (one uniquely named placeholder ConfigMap per empty layer); D10; D11 (the operator chart pin starts one release behind). Resources that use their own ${…} syntax set substitute: disabled. The cluster-vars ConfigMap is rendered from values/cluster-vars.yaml by one script, and CI fails if the committed render is stale. No hand-edited cluster state (R34).
+Done checks: CI runs kustomize build plus a schema check on every Flux Kustomization path, read from the Kustomization files so a new path is never skipped. After Gordon’s first site.yml, every Flux object reports Ready and the restic Secret exists in platform-backups with its value unprinted. Gordon’s second site.yml and second bootstrap-secrets change nothing; both are owner runs because they need the age key (D17). One PR.
 Timebox:     8h
 ```
 
 ```text
 ID:          p0a-15
-Goal:        Add Renovate on jarvis and jarvis-apps, with minor and patch auto-merge held for about 3 days.
+Goal:        Add Renovate on jarvis and jarvis-apps, opening minor and patch PRs after a 3-day hold, with auto-merge off until the P2 exit.
 Why:         P0a is done only after Renovate has opened a PR (R33).
-Advances:    P0a exit check: “Renovate has opened at least one PR.”
+Advances:    P0a exit check: “Renovate is installed and has opened at least one PR (its onboarding PR counts).”
 Depends on:  p0a-14
 Touches:     renovate.json in both repos
-Hard limits: R33. Majors are not auto-merged. Hermes digests are not auto-merged (the digest rule is enforced again in p2-20). Renovate does not manage the k3s version (D5). The image digest check itself lands with the first third-party image (p0b-07). D11. Gordon installs the Renovate GitHub App.
-Done checks: Renovate has opened at least one PR against the stale Flux Operator pin. The config shows the 3-day hold for minor and patch. One PR.
+Hard limits: R33. Auto-merge is off for every update until p2-25 turns it on for minor and patch. Majors are not auto-merged. Hermes digests are not auto-merged (the digest rule is enforced again in p2-20). Renovate does not manage the k3s version (D5). The image digest check itself lands with the first third-party image (p0b-07). Gordon installs the hosted Renovate GitHub App; no local Renovate or config-validator tooling (§11 lean standard).
+Done checks: Renovate has opened its onboarding PR or a dependency PR. The config shows the 3-day hold for minor and patch, auto-merge off, and the k3s exclusion. One PR.
 Timebox:     4h
 ```
 
 ```text
 ID:          p0a-16
-Goal:        Add the rollback drill: revert one commit and show Flux restored the prior object.
+Goal:        Run the rollback drill: change a throwaway ConfigMap through Git, revert the commit, and show Flux restored the prior value.
 Why:         Rollback is revert-the-commit (R37). P0a has to prove it once.
 Advances:    P0a exit check: “Rollback drill: reverting a commit restores the prior state.”
 Depends on:  p0a-14
-Touches:     tools/checks/verify-p0a.sh, a throwaway ConfigMap under the platform-configs path
-Hard limits: R34; R37. The drill uses a ConfigMap, not a Secret. Data restore is P0b (R31).
-Done checks: The attached log shows the new value, the revert, and the prior value back on the cluster. One PR.
+Touches:     a throwaway ConfigMap under the platform-configs path
+Hard limits: R34; R37. The drill uses a ConfigMap, not a Secret. It needs only git revert and kubectl reads; no helper script. The ConfigMap is removed once the drill passes, and the log stays with the P0a evidence outside the repo. Data restore is P0b (R31).
+Done checks: The attached log shows the new value, the revert, and the prior value back on the cluster, and the ConfigMap is gone afterward. A few tiny PRs (baseline, change, revert, remove).
 Timebox:     4h
 ```
 
@@ -268,36 +270,36 @@ Timebox:     4h
 ID:          p0a-17
 Goal:        Write the coding-agent rulebook, a lean AGENTS.md, and the PR template.
 Why:         Fix order (§11): prose only for what the checks and the deny list cannot enforce (R39). This task comes after p0a-06 through p0a-10.
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
-Depends on:  p0a-06, p0a-07, p0a-08, p0a-09, p0a-10
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
+Depends on:  p0a-06, p0a-07, p0a-08, p0a-10
 Touches:     rulebooks/coding-agents.md, AGENTS.md, .github/pull_request_template.md
-Hard limits: R35; R39. AGENTS.md points at the rulebook and does not copy it or the framework. The PR template is the brief template plus an evidence line. Branch names for coding agents are agent/<topic> (§6).
+Hard limits: R35; R39. AGENTS.md points at the rulebook and does not copy it or the framework. The rulebook carries the §11 lean standard and review rules in a few lines. The PR template is the brief template plus an evidence line and a short ready-to-merge list; its only seed rule is that each new or changed rule check fails on a seeded bad value. Branch names for coding agents are agent/<topic> (§6).
 Done checks: A reviewer can point at one rule that exists only in the rulebook because it cannot be a check. The template contains the §11 fields. One PR.
 Timebox:     4h
 ```
 
 ```text
 ID:          p0a-18
-Goal:        Wire make verify PHASE=p0a and attach a full run.
-Why:         Done for the checkpoint is the attached verify output (R35, §2).
+Goal:        Add make verify PHASE=p0a as a short checklist and attach its run.
+Why:         Done for the checkpoint is attached evidence that Gordon reviews (R35, §2).
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Advances:    P0a exit check: “A SOPS-encrypted secret decrypts in-cluster.”
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
-Advances:    P0a exit check: “Renovate has opened at least one PR.”
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
+Advances:    P0a exit check: “Renovate is installed and has opened at least one PR (its onboarding PR counts).”
 Advances:    P0a exit check: “Rollback drill: reverting a commit restores the prior state.”
 Depends on:  p0a-04, p0a-05, p0a-14, p0a-15, p0a-16, p0a-17
-Touches:     Makefile, tools/checks/verify-p0a.sh
-Hard limits: R35; R37. D17. The agent user runs the kubectl and CI evidence. Gordon’s second site.yml and second bootstrap-secrets are Gordon-run steps. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result, and a missing paste fails.
-Done checks: make verify PHASE=p0a prints NEEDS GORDON for the second site.yml and the second bootstrap-secrets, fails if either paste is missing, and exits 0 with the Flux Ready list, the decrypt proof, the ci seed links, the Renovate PR link, and the rollback log. One PR.
-Timebox:     4h
+Touches:     Makefile, tools/verify/p0a
+Hard limits: R35; R37. D17. About 50 lines, outside tools/checks/ so CI never runs it: live kubectl reads (every Flux object Ready, the restic Secret present in platform-backups with its value unprinted, the role labels on each node) and the evidence links (ci seed PRs, the Renovate PR, the rollback log). It does not re-run CI checks and has no tests of its own. Gordon’s second site.yml and second bootstrap-secrets are owner runs: it prints NEEDS GORDON for each, and the attached output includes his pastes. It stays in the repo so a rebuild re-runs it.
+Done checks: make verify PHASE=p0a exits 0 on the live cluster with the Flux Ready list and the decrypt proof, lists the evidence links, and prints NEEDS GORDON for the two owner runs; the attached output includes Gordon’s pastes. One PR.
+Timebox:     2h
 ```
 
 ### Exit checks
 
 - From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.
 - A SOPS-encrypted secret decrypts in-cluster.
-- One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).
-- Renovate has opened at least one PR.
+- One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).
+- Renovate is installed and has opened at least one PR (its onboarding PR counts).
 - Rollback drill: reverting a commit restores the prior state.
 
 Done = attached make verify PHASE=p0a output
@@ -328,10 +330,10 @@ Why:         Every PVC uses one shared backup contract before VolSync is install
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0a-18
 Touches:     platform/backups/CONTRACT.md
-Hard limits: R31. D7. Target path, retention, and weekly prune come from cluster-vars.yaml. Restore is a ReplicationDestination with a written procedure. backup: none is only for observability volumes.
+Hard limits: R31. D7. Target path, retention, and weekly prune come from cluster-vars.yaml. Restore is a ReplicationDestination with a written procedure. The opt-out is the unprefixed annotation backup: none on a PVC or on a volumeClaimTemplate’s metadata, allowed only under services/observability/victoria-metrics/ and services/observability/victoria-logs/. A StatefulSet’s volumes get one ReplicationSource per <template>-<statefulset>-<ordinal> PVC.
 Done checks: CONTRACT.md has offers, expects, health, config, and proven by. One PR.
 Timebox:     4h
-Proven by:   The R31 CI check and the P0b and P2 restore drills (§5).
+Proven by:   The R31 CI check (added with the first PVC, p0b-09) and the P0b and P2 restore drills (§5).
 ```
 
 ### Build
@@ -343,7 +345,7 @@ Why:         P0b reachability is HTTPS through Traefik Ingress (OQ8, R28).
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-01
 Touches:     platform/traefik/
-Hard limits: R1; R4; R5; R9; R30 waits for P4a. D30; D32. kube-system receives only this HelmChartConfig. No Gateway API. The placeholder ConfigMap on this path is removed (D9).
+Hard limits: R1; R4; R5; R9; R30 waits for P4a. D30; D32. kube-system receives only this HelmChartConfig. No Gateway API. The platform-controllers Kustomization points at one platform controllers list from here on, so later controllers join that list rather than add Flux paths. The placeholder ConfigMap on this path is removed (D9).
 Done checks: The HelmChartConfig is applied and Traefik is Ready, probes and memory limits are set, and no Gateway API object exists. One PR.
 Timebox:     6h
 ```
@@ -404,19 +406,19 @@ Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suff
 Depends on:  p0b-04, p0b-05, p0b-06, p0b-07
 Touches:     platform/testapp/
 Hard limits: R5; R28. D12. Hostname testapp.alpha.lan. The app is a platform fixture, not an app-<name> hosted app (that isolation is P4a, R30).
-Done checks: Gordon sets router forwarding of alpha.lan and trusts the root cert on the bastion before the LAN curl. curl from the LAN to https://testapp.alpha.lan returns the known file and the cert chains to the internal CA. The tailnet half is NEEDS GORDON (D17). One PR.
+Done checks: Gordon sets router forwarding of alpha.lan and trusts the root cert on the controller before the LAN curl. curl from the LAN to https://testapp.alpha.lan returns the known file and the cert chains to the internal CA. The tailnet half is NEEDS GORDON (D17). One PR.
 Timebox:     6h
 ```
 
 ```text
 ID:          p0b-09
-Goal:        Run the VolSync backup-and-restore test. If it fails, install the single restic CronJob. Then apply retention and the weekly prune.
+Goal:        Add the R31 PVC backup-entry check, run the VolSync backup-and-restore test (if it fails, install the single restic CronJob), then apply retention and the weekly prune.
 Why:         OQ7 is a Phase 0 test with one fallback and no further searching (R31, §4).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0b-02, p0a-14
-Touches:     platform/backups/controller, platform/backups/config
-Hard limits: R9; R31. No local S3 server. No volume snapshot controller. D3; D15; D30. VolSync schedules take TZ from cluster-vars. The ~10-minute test writes the choice into the backup CONTRACT.md config section.
-Done checks: The log shows the VolSync test result and either a working VolSync ReplicationSource or the one CronJob. Retention in cluster-vars is 7 daily / 4 weekly / 3 monthly (§7). One PR.
+Touches:     tools/checks/pvc-backup, platform/backups/controller, platform/backups/config
+Hard limits: R9; R31. No local S3 server. No volume snapshot controller. D3; D15; D30; D42. VolSync schedules take TZ from cluster-vars. The ~10-minute test writes the choice into the backup CONTRACT.md config section. The R31 check lands in this task, no later than the test volume, and stays small (about 60 lines): every PVC has a ReplicationSource or the p0b-02 backup: none annotation inside the allow-list. StatefulSet template handling waits for the first StatefulSet (P1).
+Done checks: A seeded PR with a PVC that has neither a backup entry nor backup: none fails ci. The log shows the VolSync test result and either a working VolSync ReplicationSource or the one CronJob, writing to backup_path. Retention in cluster-vars is 7 daily / 4 weekly / 3 monthly (§7). One PR.
 Timebox:     8h
 ```
 
@@ -426,22 +428,22 @@ Goal:        Run the checksum restore drill and show an etcd snapshot file on th
 Why:         P0b has to prove a deleted volume comes back with the same checksum, and that an etcd snapshot exists for same-node rollback (R31).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0b-09, p0a-12
-Touches:     tools/checks/verify-p0b.sh, platform/backups/
-Hard limits: R31. The etcd snapshot is not restored in this drill. The volume drill uses the mechanism p0b-09 kept.
+Touches:     platform/backups/ (drill volume)
+Hard limits: R31. The etcd snapshot is not restored in this drill. The drill runs by hand with kubectl reads and its log is P0b evidence; no drill helper. The volume drill uses the mechanism p0b-09 kept.
 Done checks: The log shows the original checksum, the delete, the restore, and the matching checksum, plus an etcd snapshot filename on the backup path. One PR.
 Timebox:     6h
 ```
 
 ```text
 ID:          p0b-11
-Goal:        Wire make verify PHASE=p0b and attach a full run, including the [G] tailnet line.
+Goal:        Add make verify PHASE=p0b as a short checklist and attach its run, including the [G] tailnet line.
 Why:         Done for the checkpoint is the attached verify output (§2, R35).
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0b-08, p0b-10, p0b-07
-Touches:     Makefile, tools/checks/verify-p0b.sh
-Hard limits: R28; R35. D17. Router forwarding of alpha.lan and the trusted root cert are already Gordon's steps on p0b-08. This verify re-checks LAN and collects the tailnet paste. Nothing for Tailscale is installed on the node. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result, and a missing paste fails.
-Done checks: make verify PHASE=p0b prints NEEDS GORDON for the tailnet [G] check, fails if the paste is missing, and exits 0 with the LAN curl, the cert issuer, the restore checksum, and Gordon’s tailnet paste. One PR.
+Touches:     Makefile, tools/verify/p0b
+Hard limits: R28; R35. D17. Router forwarding of alpha.lan and the trusted root cert are already Gordon's steps on p0b-08. This checklist, about 50 lines like p0a-18’s, re-checks LAN and collects the tailnet paste. Nothing for Tailscale is installed on the node. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result. The checklist reads live state and links evidence; it does not re-run CI checks (D17).
+Done checks: make verify PHASE=p0b prints NEEDS GORDON for the tailnet [G] check, and exits 0 with the LAN curl, the cert issuer, the restore checksum, and Gordon’s tailnet paste. One PR.
 Timebox:     4h
 ```
 
@@ -467,7 +469,7 @@ Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert wi
 Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
 Depends on:  p0b-11
 Touches:     services/observability/CONTRACT.md
-Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 70%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18).
+Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 80%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18).
 Done checks: The Login section and the Alert path section each have offers, expects, health, config, and proven by. One PR.
 Timebox:     6h
 Proven by:   The R27 CI check and the P2 dashboard-login check (§5). Grafana anonymous-off is the P1 half. The P1 kill-endpoint alert, the lowered-threshold alerts, and the backup-failure alert.
@@ -567,8 +569,8 @@ Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert wi
 Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
 Depends on:  p1-09
 Touches:     services/observability/grafana/alerts/
-Hard limits: R8; §7 (disk at 80% full, node memory at 70%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept.
-Done checks: The verify log shows each rule firing under the lowered threshold and the committed rules back at 80% and 70%. One PR.
+Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept.
+Done checks: The verify log shows each rule firing under the lowered threshold and the committed rules back at 80%. One PR.
 Timebox:     6h
 ```
 
@@ -579,7 +581,7 @@ Why:         These are the two live alert proofs that do not depend on Hermes (R
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
 Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
 Depends on:  p1-10
-Touches:     tools/checks/verify-p1.sh, platform/testapp scale
+Touches:     tools/verify/p1, platform/testapp scale
 Hard limits: R8. D12; D13. Restore the test app and the backup path when the check finishes. The verify script reads send success and does not print the bot token.
 Done checks: The log shows the testapp alert arriving within 5 minutes and the backup-failure alert arriving. testapp is Ready again afterward. One PR.
 Timebox:     6h
@@ -606,9 +608,9 @@ Advances:    P1 exit check: “Gatus checks every exposed endpoint; its status p
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
 Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
 Depends on:  p1-11, p1-12, p1-08
-Touches:     Makefile, tools/checks/verify-p1.sh
-Hard limits: R8; R35. D17. The tailnet Gatus load is the [G] line. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result, and a missing paste fails.
-Done checks: make verify PHASE=p1 prints NEEDS GORDON for the tailnet [G] check, fails if the paste is missing, and exits 0 with dashboard evidence, the Gatus page, both alert proofs, and Gordon’s tailnet paste. One PR.
+Touches:     Makefile, tools/verify/p1
+Hard limits: R8; R35. D17. The tailnet Gatus load is the [G] line. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result. The checklist reads live state and links evidence; it does not re-run CI checks (D17).
+Done checks: make verify PHASE=p1 prints NEEDS GORDON for the tailnet [G] check, and exits 0 with dashboard evidence, the Gatus page, both alert proofs, and Gordon’s tailnet paste. One PR.
 Timebox:     4h
 ```
 
@@ -701,10 +703,10 @@ ID:          p2-07
 Goal:        Add the hermes.yaml render script and the CI diff check, and seed a stale render.
 Why:         One checked-in script renders profiles, and a hand-edited rendered/ must fail (R4).
 Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
-Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a PVC with no backup entry, a missing CONTRACT.md, an unknown code_delivery or build_agent value; the stale-render seed waits for P2, when the Hermes render exists).”
+Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
 Depends on:  p2-06b, p0a-05
 Touches:     tools/render-profiles, envs/env-01/rendered/, tools/checks/render-diff
-Hard limits: R4. rendered/ is generated and never hand-edited. The stale-render seed is the one P0a deferred until this render existed.
+Hard limits: R4. rendered/ is generated and never hand-edited. The stale-render seed lands with this render.
 Done checks: A fresh render matches rendered/. A seeded PR that edits rendered/ without rerendering fails ci. One PR.
 Timebox:     6h
 ```
@@ -788,7 +790,7 @@ Goal:        Route /api/<profile>/v1 to each bot and run the scripted non-error 
 Why:         The assistant API is the only supported way to talk to a bot (R17).
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
 Depends on:  p2-10, p2-13
-Touches:     services/hermes/deploy/ops/ routing, tools/checks/verify-p2.sh
+Touches:     services/hermes/deploy/ops/ routing, tools/verify/p2
 Hard limits: R17. The API requires the deploy API key. The three profile names are concierge, inbox, and homelab.
 Done checks: A scripted prompt to each of the three URLs returns a non-error answer. One PR.
 Timebox:     4h
@@ -849,7 +851,7 @@ Goal:        Record usage from Hermes analytics and the grok.com confirmation li
 Why:         Subscription use has to be visible per bot and on the subscription dashboard (R23).
 Advances:    P2 exit check: “Each bot’s evals (≥3) pass against the deployed bots (make verify, R38); usage is readable in Hermes analytics and the grok.com dashboard [G]; with the subscription login revoked or capped (a 401 test fixture stands in; the real login stays signed in), the dashboard and Telegram show an error within ~30 s and make verify fails (R18).”
 Depends on:  p2-14, p2-17
-Touches:     tools/checks/verify-p2.sh
+Touches:     tools/verify/p2
 Hard limits: R23. D18. No usage data is copied into Git.
 Done checks: The verify log quotes a non-empty Hermes analytics usage field. The grok.com dashboard line is [G]: make verify prints NEEDS GORDON and the attached output includes Gordon’s paste. One PR.
 Timebox:     4h
@@ -897,8 +899,8 @@ Goal:        Add CI guards for the Telegram allow-list, model names outside envs
 Why:         Fix order (§11): profiles and the dashboard already require these; CI keeps a later edit from dropping them (R21, R23, R27).
 Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).”
 Depends on:  p2-10, p2-15, p1-12
-Touches:     tools/checks/ui-auth, tools/checks/allow-list, tools/checks/model-names
-Hard limits: R21; R23; R27. A telegram: true profile with an empty allow-list fails. A model name in core fails. Grafana anonymous-off stays in the same ui-auth script from p1-12.
+Touches:     tools/checks/ui-auth, tools/checks/allow-list, tools/checks/core-names (model-name half)
+Hard limits: R21; R23; R27. A telegram: true profile with an empty allow-list fails. A model name in core fails: core-names reads the names from the env tier and lane maps, which hold names from p2-13. Grafana anonymous-off stays in the same ui-auth script from p1-12.
 Done checks: Three seeded PRs fail ci, and the live ops dashboard manifest has auth configured. One PR.
 Timebox:     6h
 ```
@@ -929,9 +931,9 @@ Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>
 Advances:    P2 exit check: “After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.”
 Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Depends on:  p2-11, p2-15, p2-16, p2-17, p2-18, p2-19, p2-20, p2-21, p2-24
-Touches:     Makefile, tools/checks/verify-p2.sh
-Hard limits: R35; R36; R38. D17. This PR touches tools/checks/, so it waits for admin-approved. The [G] lines are concierge’s Telegram reply and the grok.com dashboard. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result, and a missing paste fails.
-Done checks: make verify PHASE=p2 prints NEEDS GORDON for the Telegram [G] check and the grok.com dashboard [G] check, fails if either paste is missing, and exits 0 with the scripted prompts, geo evals, memory log, eval summary, degrade log, bump log, dashboard login, restore log, admin-gate seeds, and Gordon’s Telegram paste. One PR.
+Touches:     Makefile, tools/verify/p2
+Hard limits: R35; R36; R38. D17. This PR touches tools/verify/, so it waits for admin-approved. The [G] lines are concierge’s Telegram reply and the grok.com dashboard. Once the P2 exit check passes, a small renovate.json change in both repos turns on minor and patch auto-merge (R33); majors and Hermes digests stay off. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result. The checklist reads live state and links evidence; it does not re-run CI checks (D17).
+Done checks: make verify PHASE=p2 prints NEEDS GORDON for the Telegram [G] check and the grok.com dashboard [G] check, and exits 0 with the scripted prompts, geo evals, memory log, eval summary, degrade log, bump log, dashboard login, restore log, admin-gate seeds, and Gordon’s Telegram paste. After the exit passes, both repos’ renovate.json show minor and patch auto-merge on. One PR, plus the renovate.json change in each repo.
 Timebox:     6h
 ```
 
@@ -961,12 +963,12 @@ No new §5 contract. The skill contract remains the one written in P2.
 
 ```text
 ID:          p3-00
-Goal:        Add make google-consent, the OAuth loopback flow on the bastion.
+Goal:        Add make google-consent, the OAuth loopback flow on the controller.
 Why:         The Gmail and Calendar token has to be sealed before a bot reads mail (R15, R25).
 Advances:    P3 exit check: “The morning brief arrives at its scheduled time with calendar, email and weather (Open-Meteo, attributed; “weather unavailable” if it is down), and reaches Telegram [G].”
 Depends on:  p0a-04, p2-25
 Touches:     tools/google-consent, Makefile
-Hard limits: R15; R25. D40. Loopback flow on the bastion. Scopes are gmail.readonly, gmail.compose, and calendar.readonly only. The token is written through make seal into SOPS, then into WORKSPACE_MCP_CREDENTIALS_DIR/<email>.json with USER_GOOGLE_EMAIL set. That credentials file stays writable so the server can refresh it.
+Hard limits: R15; R25. D40. Loopback flow on the controller. Scopes are gmail.readonly, gmail.compose, and calendar.readonly only. The token is written through make seal into SOPS, then into WORKSPACE_MCP_CREDENTIALS_DIR/<email>.json with USER_GOOGLE_EMAIL set. That credentials file stays writable so the server can refresh it.
 Done checks: A fixture loopback run seals a token whose scopes are only those three. One PR.
 Timebox:     4h
 ```
@@ -1083,9 +1085,9 @@ Advances:    P3 exit check: “Asked in chat to draft a reply to a seeded email,
 Advances:    P3 exit check: “An eval asserts no bot can send, delete, apply Gmail labels, write to calendar or reach Drive.”
 Advances:    P3 exit check: “A forced bot cron failure sends a Telegram alert without going through Hermes (a log-based Grafana alert on Hermes cron errors).”
 Depends on:  p3-04, p3-05, p3-06, p3-07
-Touches:     Makefile, tools/checks/verify-p3.sh
-Hard limits: R35. D17. This PR touches tools/checks/ and waits for admin-approved (R36). The [G] lines are the morning brief, the evening wrap, and the weekly review on Telegram. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result, and a missing paste fails.
-Done checks: make verify PHASE=p3 prints NEEDS GORDON for each of the three Telegram [G] checks, fails if any paste is missing, and exits 0 with the three brief bodies, Gordon’s three Telegram pastes, the stuck-update finding, the eval list, the draft proof, and the cron alert. One PR.
+Touches:     Makefile, tools/verify/p3
+Hard limits: R35. D17. This PR touches tools/verify/ and waits for admin-approved (R36). The [G] lines are the morning brief, the evening wrap, and the weekly review on Telegram. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result. The checklist reads live state and links evidence; it does not re-run CI checks (D17).
+Done checks: make verify PHASE=p3 prints NEEDS GORDON for each of the three Telegram [G] checks, and exits 0 with the three brief bodies, Gordon’s three Telegram pastes, the stuck-update finding, the eval list, the draft proof, and the cron alert. One PR.
 Timebox:     4h
 ```
 
@@ -1190,9 +1192,9 @@ Why:         Done for the checkpoint is the attached verify output (§2). The li
 Advances:    P4a exit check: “After Gordon adds one line to apps.yaml, the outside app deploys to its own namespace, is reachable at app-<name>.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Advances:    P4a exit check: “A seeded jarvis-apps PR with a cluster-scoped object fails CI (R30).”
 Depends on:  p4a-03, p4a-04, p4a-05, p4a-06
-Touches:     envs/env-01/values/apps.yaml, tools/checks/verify-p4a.sh
-Hard limits: R28; R30; R35; R36. D12 stays the platform fixture; the hosted app is app-demo. The network-policy test shows the app pod cannot reach Grafana, the ops API, DNS-to-core service ClusterIPs, or the node IP on 443 (Traefik). Tailnet reachability is the [G] check. Gordon’s apps.yaml merge is a Gordon-run step. apps.yaml and tools/checks/ are protected. D17. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result, and a missing paste fails.
-Done checks: make verify PHASE=p4a prints NEEDS GORDON for the tailnet [G] check and for Gordon’s apps.yaml line, fails if either paste is missing, and exits 0 with the app Ready in namespace app-demo, LAN curl to https://app-demo.alpha.lan, the Gatus row, the denied-egress log including the node IP on 443, the seeded cluster-scoped failure, and Gordon’s tailnet paste. One PR.
+Touches:     envs/env-01/values/apps.yaml, tools/verify/p4a
+Hard limits: R28; R30; R35; R36. D12 stays the platform fixture; the hosted app is app-demo. The network-policy test shows the app pod cannot reach Grafana, the ops API, DNS-to-core service ClusterIPs, or the node IP on 443 (Traefik). Tailnet reachability is the [G] check. Gordon’s apps.yaml merge is a Gordon-run step. apps.yaml and tools/verify/ are protected. D17. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result. The checklist reads live state and links evidence; it does not re-run CI checks (D17).
+Done checks: make verify PHASE=p4a prints NEEDS GORDON for the tailnet [G] check and for Gordon’s apps.yaml line, and exits 0 with the app Ready in namespace app-demo, LAN curl to https://app-demo.alpha.lan, the Gatus row, the denied-egress log including the node IP on 443, the seeded cluster-scoped failure, and Gordon’s tailnet paste. One PR.
 Timebox:     6h
 ```
 
@@ -1429,9 +1431,9 @@ Advances:    P4b exit check: “Token scopes show no agent holds push credential
 Advances:    P4b exit check: “A forced timeout gets the issue the code-factory:failed label, and foreman says so.”
 Advances:    P4b exit check: “The code-factory App adding admin-approved fails admin-gate.”
 Depends on:  p4b-08, p4b-10, p4b-11, p4b-12, p4b-13, p4b-14
-Touches:     Makefile, tools/checks/verify-p4b.sh
-Hard limits: R35; R36; R40; R42. This PR touches tools/checks/ and waits for admin-approved. Gordon applying code-factory:ready is a Gordon-run step. D17. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result, and a missing paste fails.
-Done checks: make verify PHASE=p4b prints NEEDS GORDON for Gordon’s code-factory:ready step, fails if the paste is missing, and exits 0 with the draft PR URL, the ignored-label comment, the spec-writer issue, the fix-cap log, the family-seed failure, the token-scope output, the timeout label, and the code-factory App admin-approved failure. One PR.
+Touches:     Makefile, tools/verify/p4b
+Hard limits: R35; R36; R40; R42. This PR touches tools/verify/ and waits for admin-approved. Gordon applying code-factory:ready is a Gordon-run step. D17. §2: make verify prints NEEDS GORDON for each [G] check and each Gordon-run step; the attached output includes his pasted result. The checklist reads live state and links evidence; it does not re-run CI checks (D17).
+Done checks: make verify PHASE=p4b prints NEEDS GORDON for Gordon’s code-factory:ready step, and exits 0 with the draft PR URL, the ignored-label comment, the spec-writer issue, the fix-cap log, the family-seed failure, the token-scope output, the timeout label, and the code-factory App admin-approved failure. One PR.
 Timebox:     4h
 ```
 

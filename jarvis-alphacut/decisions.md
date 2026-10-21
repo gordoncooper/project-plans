@@ -1,6 +1,6 @@
 # JARVIS AlphaCut — Decisions
 
-Defaults chosen where `framework.md` is silent. Merging PR #2 accepts all defaults except those marked Confirmed by Gordon.
+Defaults chosen where `framework.md` is silent. Merging this file accepts all defaults except those marked Confirmed by Gordon.
 
 Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. The other entries are accepted-with-plan defaults.
 
@@ -22,7 +22,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D3
 
-- Decision: local-path data is `/var/lib/jarvis/local-path`. The backup path is `/var/lib/jarvis/backup`.
+- Decision: local-path data is `/var/lib/jarvis/local-path`. The backup path is `/var/lib/jarvis/backup`. When a node has a data disk, `/var/lib/jarvis` is its mount point, so the paths stay the same (D42).
 - Reason: both directories are required and neither path is named.
 - Where: Ansible, VolSync, etcd snapshots (`p0a-12`, `p0b-09`).
 - Status: accepted-with-plan default.
@@ -58,6 +58,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Backups: `platform/backups/CONTRACT.md`
   - Login and alert path: `services/observability/CONTRACT.md`
   - Model provider, assistant API, and skill contract: `services/hermes/core/CONTRACT.md`
+  - Each Hermes deploy (`services/hermes/deploy/ops`, `services/hermes/deploy/code-factory`) is a component root; its `CONTRACT.md` lists the R13 egress hosts it uses.
   - Sandbox: `services/hermes/deploy/code-factory/sandbox/CONTRACT.md`
   - Code-factory work protocol: `services/hermes/deploy/code-factory/CONTRACT.md`
   - App hosting: `platform/app-hosting/CONTRACT.md`
@@ -67,14 +68,14 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D8
 
-- Decision: the R2 check treats a component root as a §6 folder the layout assigns `CONTRACT.md`. Nested directories are not component roots.
+- Decision: the R2 check treats a component root as a §6 folder the layout assigns `CONTRACT.md`. Every direct child of `platform/` is a root. Nested directories are not component roots, and a parent that holds only nested roots and no files of its own is skipped until it is built.
 - Reason: the rule requires the file and does not define the folder set. A check on every directory would fail on `skills/` and `tests/`.
 - Where: `tools/checks` (`p0a-08`).
 - Status: accepted-with-plan default.
 
 ## D9
 
-- Decision: a Flux path with no component yet contains one ConfigMap named `placeholder`, so the Kustomization is Ready. The task that adds the component removes that ConfigMap.
+- Decision: a Flux path with no component yet contains one ConfigMap named `placeholder-<layer>` (unique per layer, since two layers can share a namespace), so the Kustomization is Ready. The task that adds the component removes that ConfigMap.
 - Reason: P0a requires every Flux object Ready before Traefik, observability, and Hermes exist.
 - Where: `envs/env-01/flux` (`p0a-14` and later component tasks).
 - Status: accepted-with-plan default.
@@ -89,7 +90,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D11
 
 - Decision: the first Flux Operator chart pin is one release behind current, so Renovate has a PR to open. Merging that PR is allowed afterward.
-- Reason: the P0a check requires an open Renovate PR, and a fully current pin set can open none.
+- Reason: it gives Renovate a real dependency PR to open, which p3-04 can reuse as a stuck-update seed. The P0a check also accepts Renovate’s onboarding PR.
 - Where: the Flux Operator pin in `p0a-14`, opened as a PR by `p0a-15`.
 - Status: accepted-with-plan default.
 
@@ -130,8 +131,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D17
 
-- Decision: `make verify PHASE=<phase>` runs every check the agent user can run from the bastion. Commands only Gordon can run, and every `[G]` check, print a `NEEDS GORDON` line. The attached output includes his pasted result. A missing paste fails the run. The “another ID gets none” check uses a gateway-handler fixture for the non-allow-listed ID.
-- Reason: §2 requires attached verify output, and reserves `[G]` checks and `site.yml` for Gordon. The agent user has no SSH key (R25, §8). No second Telegram account is available, so the non-allow-listed ID is a fixture.
+- Decision: `make verify PHASE=<phase>` is a short checklist (`tools/verify/<phase>`, about 50 lines, no tests of its own) that runs the live reads the agent user can run and lists the evidence links. Steps that need the age key (a full `site.yml`, `bootstrap-secrets`) are owner runs by Gordon; the agent user keeps node SSH only for narrow runs that need no age key (for example `site.yml --tags kubeconfig`). Owner runs and every `[G]` check print a `NEEDS GORDON` line. The attached output includes his pasted result, and Gordon reviewing it is the gate. The “another ID gets none” check uses a gateway-handler fixture for the non-allow-listed ID.
+- Reason: §2 requires attached verify output, and reserves `[G]` checks and full `site.yml` runs for Gordon. The age key is never on the agent user (R25, §8). No second Telegram account is available, so the non-allow-listed ID is a fixture.
 - Where: every phase verify task.
 - Status: accepted-with-plan default.
 
@@ -221,8 +222,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D30
 
-- Decision: container memory stays inside the §7 budgets. Starting requests: VictoriaMetrics 512Mi, VictoriaLogs 512Mi, Grafana 256Mi, Gatus 128Mi, Fluent Bit 64Mi, vmagent 128Mi, node-exporter 64Mi, kube-state-metrics 64Mi, Hermes ops 2Gi with a 3Gi limit, Hermes code-factory 1Gi with a 2Gi limit, each platform container 128Mi request and 256Mi limit. A platform container may be raised only while the platform total stays near 2Gi. Every container has a CPU request and no CPU limit.
-- Reason: R5 requires numbers and §7 gives budgets, not per-container sizes.
+- Decision: every container starts from these memory requests and is tuned from Grafana as real usage shows up: VictoriaMetrics 512Mi, VictoriaLogs 512Mi, Grafana 256Mi, Gatus 128Mi, Fluent Bit 64Mi, vmagent 128Mi, node-exporter 64Mi, kube-state-metrics 64Mi, Hermes ops 2Gi with a 3Gi limit, Hermes code-factory 1Gi with a 2Gi limit, each platform container 128Mi request and 256Mi limit. Every container has a memory request and limit and a CPU request, and no CPU limit.
+- Reason: R5 requires numbers; real usage, not up-front calculation, sets the final sizes.
 - Where: every manifest task.
 - Status: accepted-with-plan default.
 
@@ -249,7 +250,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D34
 
-- Decision: the node SSH user is an env setting, `ssh_user` in `cluster-vars.yaml`, default `ubuntu`. Gordon installs Ubuntu with his SSH key on that user. `site.yml` sets `ansible_user` from it and runs every task as root with become; k3s is a root systemd service, and nothing installs under that user.
+- Decision: the node SSH user is an env setting, `ssh_user` in `cluster-vars.yaml`, default `ubuntu`. The default lives once, in the env schema’s resolved values; Ansible consumes the resolved value and adds no fallback of its own. Gordon installs Ubuntu with his SSH key on that user. `site.yml` sets `ansible_user` from it and runs every task as root with become; k3s is a root systemd service, and nothing installs under that user.
 - Reason: the user is only a login, so the Ubuntu default needs no extra user, and an env that differs changes one value (R3, R4).
 - Where: `p0a-01`, `p0a-06`, `p0a-12`, `p0a-13`.
 - Status: Confirmed by Gordon 2026-10-19.
@@ -302,3 +303,24 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 - Reason: GitHub’s own server. Its read-only and toolset switches are the whole restriction. App auth is native. R13 allows this one token in ops.
 - Where: `p3-02`, `p3-04`, `p4b-09a`.
 - Status: Confirmed by Gordon 2026-10-19.
+
+## D42
+
+- Decision: node roles and the optional data disk live in `envs/<env>/values/nodes.yaml`, schema-validated and read by Ansible only:
+
+  ```yaml
+  nodes:
+    bench.lan:                         # an inventory host
+      roles: [control-plane, worker, storage, backup]   # allowed: control-plane, worker, storage, backup, gpu
+      data_disk:                       # optional; omit it and data stays on the root disk
+        id: /dev/disk/by-id/<stable id>   # never /dev/nvmeXnY
+        wipe_confirmed: true
+  ```
+
+  - Roles: exactly one `control-plane` (the k3s server) and exactly one `backup` node. Each role becomes `role.jarvis.lan/<role>=true` through k3s `node-label` in `config.yaml` at first start, since k3s applies labels only when a node registers.
+  - Disk: the data disk mounts at `/var/lib/jarvis`, so the D3 paths do not change; without one, the same paths sit on the root disk. k3s and images stay on root. Layout: `local-path/` (PVC volumes), `backup/etcd-snapshots/`, `backup/restic/` (VolSync repositories), `.jarvis-env` (the mark). Backups on the same disk cover mistakes and rollback, not disk loss; off-site is deferred (R31).
+  - Safety (`node-disk` role, after base-os, before k3s first starts): refuse a missing, root or mounted disk. A disk with this env’s mark (label `jarvis-data` plus `.jarvis-env`) is mounted, never wiped. Otherwise wipe only with both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>`; with either missing, stop and print the disk’s model, size and partitions. Never mount over a non-empty `/var/lib/jarvis`.
+  - env-01: bench.lan holds every role; its data disk is the 1 TB Corsair MP600 Mini, by the by-id path read from bench.lan. Gordon confirms it may be wiped at the wipe-and-rebuild.
+- Reason: Gordon (2026-10-20) wants roles and disks as per-node env config for future multi-node envs, with a secondary disk wiped only after confirmation. Two keys keep a stale flag or a copied env from wiping a disk.
+- Where: `p0a-11a`, before `p0a-12` (k3s); framework §6.
+- Status: Accepted by Gordon 2026-10-20.
