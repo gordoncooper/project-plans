@@ -278,7 +278,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D38
 
-- Decision: admin-gate’s bot and App actor cases are proven by a fixture event (actor type Bot, and actor type App) run in CI against the same function the workflow calls. The live PR proves a label from `gordon5417-ai` fails, and a label Gordon’s own account adds after the latest commit passes.
+- Decision: admin-gate’s bot and App actor cases are proven by a fixture event (actor type Bot, and actor type App) run in CI against the workflow’s inline logic. The live PR proves a label from `gordon5417-ai` fails, and a label Gordon’s own account adds after the latest commit passes.
 - Reason: the P2 check requires a bot or App actor, and the code-factory App is created at P4 (§8).
 - Where: p2-24. The live App label is repeated at p4b-10.
 - Status: Confirmed by Gordon 2026-10-19.
@@ -327,6 +327,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
   - Groups: the empty prefix and separator name each group after its role, so `--limit storage` and `hosts: storage` work.
   - Schema: `node_roles` (not Ansible’s reserved `roles`) from the known set; exactly one `control_plane` host and one `backup` host; `data_disk` as shown; no other host keys (no IPs, R25).
+  - Secrets: inventory and group_vars never need the age key. Secrets live only in SOPS files that bootstrap-secrets and Flux decrypt, never loaded through the community.sops vars plugin, so narrow runs work without the key (D17).
   - Plays: base-os on `all`, node-disk on hosts with `data_disk`, the k3s server on `control_plane`, with `node-name` from `inventory_hostname`.
   - Labels: `role.<dns_suffix>/<role>=true` for each role; the prefix is reserved for them. A task on `control_plane` sets them with kubernetes.core on every run and removes prefixed labels for dropped roles. No k3s `node-label`, which applies only at registration.
   - Edge: 80/443 (Traefik) and 53 (JARVIS DNS) land on the `edge` nodes, or on `control_plane` when none is edge. The same task reconciles servicelb’s `svccontroller.k3s.cattle.io/enablelb=true` label onto exactly that set on every run.
