@@ -312,19 +312,19 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   # envs/<env>/inventory/hosts.yml
   all:
     children:
-      control_plane: {hosts: {bench.lan: }}   # allowed groups: control_plane, workers, storage, backup, gpu
-      workers:       {hosts: {bench.lan: }}
-      storage:       {hosts: {bench.lan: }}
-      backup:        {hosts: {bench.lan: }}
+      control_plane: {hosts: {<host>: }}   # allowed groups: control_plane, workers, storage, backup, gpu
+      workers:       {hosts: {<host>: }}
+      storage:       {hosts: {<host>: }}
+      backup:        {hosts: {<host>: }}
 
-  # envs/<env>/inventory/host_vars/bench.lan.yml
+  # envs/<env>/inventory/host_vars/<host>.yml
   data_disk:                          # optional; omit it and data stays on the root disk
     id: /dev/disk/by-id/<stable id>   # a whole disk; never /dev/nvmeXnY or a -partN path
     wipe_confirmed: true
   ```
 
   - Groups: the names use underscores, never hyphens. The schema rejects an unknown group name, a host_vars file for a host that is not in the inventory, and any host_vars key other than `data_disk` (no IPs, R25). It requires exactly one host in `control_plane` (the k3s server) and exactly one in `backup`. A host may sit in several groups.
-  - Plays target groups: base-os runs on `all`, node-disk only on hosts that set `data_disk`, and the k3s server on `control_plane`. The k3s config sets `node-name` from `inventory_hostname`. Labels come from each host’s `group_names` as `role.jarvis.lan/<group>=true`. A task on `control_plane` applies them with the kubernetes.core module on every run, removing `role.jarvis.lan/` labels for groups a host has left, so group changes are reconciled. k3s `node-label` is not used, because it applies only at registration. Verify flags any drift (D17).
+  - Plays target groups: base-os runs on `all`, node-disk only on hosts that set `data_disk`, and the k3s server on `control_plane`. The k3s config sets `node-name` from `inventory_hostname`. Labels come from each host’s `group_names` as `role.<dns_suffix>/<group>=true`, prefixed by the env’s domain (D44). A task on `control_plane` applies them with the kubernetes.core module on every run, removing `role.<dns_suffix>/` labels for groups a host has left, so group changes are reconciled. k3s `node-label` is not used, because it applies only at registration. Verify flags any drift (D17).
   - Roles are declared, never auto-detected, and site.yml asserts them against facts. Before any change, a `gpu` host must have an NVIDIA device. After node-disk and before k3s, a host with `data_disk` must have `/var/lib/jarvis` mounted as the `jarvis-data` filesystem. A fresh node passes because node-disk has just mounted the disk.
   - Boot safety: on a host with `data_disk`, node-disk installs a systemd drop-in for `k3s.service` with `RequiresMountsFor=/var/lib/jarvis`. With `nofail` the host still boots without the disk, but k3s does not start, so nothing is written to the root disk in its place.
   - Disk: the data disk mounts at `/var/lib/jarvis`, so the D3 paths do not change; without one, the same paths sit on the root disk. k3s and images stay on root. The filesystem label `jarvis-data` identifies the disk, and fstab mounts it by `LABEL=jarvis-data` with `nofail`. Layout: `local-path/` (PVC volumes), `backup/etcd-snapshots/`, `backup/restic/` (VolSync repositories). Backups on the same disk cover mistakes and rollback, not disk loss; off-site is deferred (R31).
@@ -332,5 +332,29 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Public repo: the by-id path contains the disk’s serial number. That is accepted as low risk.
   - env-01: bench.lan is in `control_plane`, `workers`, `storage` and `backup`. Its data disk is the 1 TB Corsair MP600 Mini, by the by-id path read from bench.lan. Gordon confirms it may be wiped at the wipe-and-rebuild.
 - Reason: Gordon (2026-10-20) wants roles defined in the inventory, where Ansible already targets hosts. Groups give plays native targeting, and `group_names` gives the labels without a second list. Checking declared roles against facts catches a wrong inventory without guessing roles. A label mount survives device renames. Two keys keep a stale flag or a copied env from wiping a disk.
-- Where: `p0a-11a` (before `p0a-12`), `p0a-12`, `p0a-13`, `p0a-18`; framework §5 and §6.
+- Where: `p0a-11a` (before `p0a-12`), `p0a-12`, `p0a-13`, `p0a-18`; env-00 is the multi-node fixture (D43); framework §5 and §6.
+- Status: Proposed; accepted when the owner merges this PR.
+
+## D43
+
+- Decision: `envs/env-00` is an example env, a pretend 7-node cluster that is never deployed. It is the one complete fixture for the env schema, the inventory and the Ansible role logic.
+  - Hosts are invented, on the example domain `env-00.example`: `cp-1` (`control_plane`), `wk-1` to `wk-4` (`workers`, with `wk-2` and `wk-3` also in `gpu`), `st-1` (`storage`) and `bk-1` (`backup`). Every group is used.
+  - Every host except `wk-4` has a `data_disk` host_vars file with a made-up by-id path, and `wipe_confirmed` is true on some and false on others. `wk-4` keeps its data on the root disk.
+  - Values set every key the schema allows, using example values: `dns_suffix: env-00.example`, the repo URL `https://github.com/example-owner/jarvis`, the owner handle `example-owner`, and an example `ssh_user`. No value is copied from a real env.
+  - It has no `secrets/`, no SOPS group_vars and no `flux/`, because it never deploys and the schema does not require them. If a later schema key needs a SOPS file, it gets a clearly fake placeholder encrypted to a throwaway test key.
+  - CI validates it like any env. A behavior test asserts that env-00 sets every key the schema allows, so a new schema key fails CI until env-00 sets it. CI also runs `ansible-inventory --graph` on its inventory, plus the role and fact asserts in check mode where they need no host (group and host_vars rules, the label set from `group_names`).
+- Reason: Gordon (2026-10-20): Jarvis is a product, not a home-lab pet, so its core is proven against a full multi-node env, not only the one-node env-01. Requiring every key catches schema keys the example forgot.
+- Where: `p0a-05a`, extended by `p0a-11a`; used by `p0a-11` and `p0a-12`; framework §5 and §6.
+- Status: Proposed; accepted when the owner merges this PR.
+
+## D44
+
+- Decision: environment-identity values never appear in the repo’s core. Each kind is a GitHub Actions repo variable, with an env var of the same name for local runs. The kinds are the owner’s personal name, the GitHub owner and account handles, the repo slug (`<owner>/<repo>`), node hostnames, login usernames (home paths `/home/<user>` derive from them) and the LAN domain. Lists are comma-separated.
+  - The core-names check (`tools/checks/core-names`) holds no values. It reads only these variables and fails loudly when one is unset in CI. It scans `infra/`, `platform/`, `services/`, `tools/`, `docs/`, every README and `rulebooks/`. Matching is case-insensitive on word boundaries, so a handle inside a URL is caught and a substring of a longer word is not.
+  - `envs/<env>/` may hold hostnames, the repo URL with its owner handle, usernames and the domain, because that is env config. The owner’s personal name is allowed nowhere, `envs/` included.
+  - The repo is matched as its slug, because the bare repo name is the product name, which core may use. Generic words such as `ubuntu`, `agent` and `operator` are product defaults, not identity, so they stay out of the variables.
+  - Code that needs an identity value at run time, such as admin-gate’s owner account or the code-factory label-actor check, reads the same repo variable.
+  - The LAN domain is the env’s DNS suffix: `dns_suffix` in `cluster-vars.yaml`, schema-validated and reaching manifests as `DNS_SUFFIX` through postBuild. Hostnames, Ingress, the wildcard cert and the node-label prefix `role.<dns_suffix>/<group>` all derive from it.
+- Reason: Gordon (2026-10-20) wants core to read the same for any owner. Keeping the values in variables means the check never contains the names it guards.
+- Where: `p0a-05` (`dns_suffix`), `p0a-07`, `p0a-12`, `p0a-18`, `p2-24`, the P4b label-actor check; framework R3, §5, §6, §8 and §11.
 - Status: Proposed; accepted when the owner merges this PR.
