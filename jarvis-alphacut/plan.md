@@ -26,7 +26,7 @@ One list, from §8. Each action names the task that waits on it.
 - P0: fresh-install Ubuntu 26.04 Server (minimal install) with Gordon’s SSH key on the env’s SSH user (ssh_user, default ubuntu; D34). Task: p0a-12.
 - P0: set a DHCP reservation. Task: p0a-12.
 - P0: run the first site.yml, then the second site.yml and the second make bootstrap-secrets, from the controller (each needs the age key, so these are owner runs). Task: p0a-14.
-- P0: for a node with a secondary data disk, record its stable disk id in nodes.yaml and confirm the wipe at run time (D42). Task: p0b-02a.
+- P0: for a node with a secondary data disk, record its stable disk id in nodes.yaml and confirm the wipe at run time (D42). Task: p0a-11a.
 - P0: once JARVIS DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
 - P0: trust the root cert on each device. Task: p0b-08.
 - P1: create the send-only alerts bot with BotFather. Task: p1-09.
@@ -115,7 +115,7 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Depends on:  p0a-03
 Touches:     tools/bootstrap-secrets, tools/seal, Makefile
 Hard limits: R7; R25; R35. The script creates the internal CA, the VolSync restic password, the Grafana admin password, and each deploy’s Hermes API key, dashboard password hash, and signing secret (D16). It never overwrites. The real age private key stays out of CI (D33). D10: only the restic secret is referenced in-cluster at P0a. There is no default env: with one env under envs/ both tools pick it, and once there are two, ENV= (or --env) is required.
-Done checks: A unit test with a throwaway age key shows a second run leaves the files byte-identical. Gordon runs make bootstrap-secrets on the bastion and commits the SOPS output (see Gordon-only actions). One PR.
+Done checks: A unit test with a throwaway age key shows a second run leaves the files byte-identical. Gordon runs make bootstrap-secrets on the controller and commits the SOPS output (see Gordon-only actions). One PR.
 Timebox:     6h
 ```
 
@@ -192,15 +192,28 @@ Timebox:     6h
 ```
 
 ```text
+ID:          p0a-11a
+Goal:        Declare each node’s roles and optional data disk in env values, and have Ansible prepare the disk before k3s first starts (D42).
+Why:         k3s, its etcd snapshots, volumes and backups write under /var/lib/jarvis, and k3s applies node labels only when a node first registers, so disks and roles come before k3s (R3, R31).
+Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
+Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
+Depends on:  p0a-05, p0a-11
+Touches:     envs/env-01/values/nodes.yaml, services/hermes/core/schema/, infra/ansible/roles/node-disk, infra/ansible/site.yml
+Hard limits: R1; R3; R4; R31. D3; D42. node-disk runs after base-os and before k3s. The disk is named by a stable /dev/disk/by-id path, never a kernel name. Ansible refuses to wipe without both the committed confirm flag and a matching run-time confirmation, and never touches a disk that holds the root filesystem or is mounted. A disk already marked as this env’s Jarvis data disk is mounted, never wiped. local_path_data and backup_path do not change: they sit under the data mount, or on the root disk when a node has none. Only one server node (control-plane) is built; other roles are labels, which p0a-12 writes into the k3s config.yaml.
+Done checks: The env schema rejects an unknown role, a node not in the inventory, a data disk without a by-id path, and an env without exactly one control-plane node (small tests). A narrow node-disk run without the run-time confirmation stops before touching the disk and prints its model, size and partitions (no age key needed). Gordon’s first live site.yml (p0a-14, an owner run) wipes and mounts the data disk before k3s starts, and his second changes nothing. One PR.
+Timebox:     6h
+```
+
+```text
 ID:          p0a-12
 Goal:        Add the k3s role: config.yaml, fixed CIDRs, secrets encryption, reserves, local-path, backup path, etcd snapshots, marker file.
 Why:         Phase 0 installs k3s from config.yaml because Ubuntu sudo-rs drops INSTALL_K3S_* (§8, R1).
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
-Depends on:  p0a-11
+Depends on:  p0a-11a
 Touches:     infra/ansible/roles/k3s, envs/env-01/values/cluster-vars.yaml
 Hard limits: R1; §7 (kube and system reserves about 1 GB each, eviction thresholds); R28; R31; R33. D2; D3; D4; D5; D6; D34. The k3s version and binary checksum are pinned in cluster-vars.yaml and change only by PR. Renovate does not manage them. Ansible logs in as ssh_user and runs every task as root with become (D34). site.yml refuses a host that already runs k3s unless /etc/jarvis/env holds this env’s name; the first run writes that marker. site.yml writes the kubeconfig only to the running user’s ~/.kube/config; copying it to another controller user is a controller setup step outside the repo. The node is the spare env-01 box, wiped and freshly installed by Gordon before this role runs.
-Done checks: A small test of the rendered config.yaml shows --cluster-init, secrets encryption, the CIDRs, the reserves, the snapshot directory, and no INSTALL_K3S_* variable. One container test, on the node OS image (ubuntu:26.04), shows site.yml refuses a host that runs k3s without the marker (the only safe proof of that guard); the first live site.yml proves the fresh-node path. One PR.
+Done checks: A small test of the rendered config.yaml shows --cluster-init, secrets encryption, the CIDRs, the reserves, the snapshot directory, the node-label entries from nodes.yaml (role.jarvis.lan/<role>=true, D42), and no INSTALL_K3S_* variable. One container test, on the node OS image (ubuntu:26.04), shows site.yml refuses a host that runs k3s without the marker (the only safe proof of that guard); the first live site.yml proves the fresh-node path. One PR.
 Timebox:     8h
 ```
 
@@ -212,7 +225,7 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Depends on:  p0a-12, p0a-04
 Touches:     infra/ansible/roles/flux-operator, infra/ansible/site.yml
 Hard limits: R1; R25. The private age key is applied once as flux-system/sops-age, which Flux never reconciles, with no_log on every task that handles it. A full site.yml needs SOPS_AGE_KEY_FILE, so it is an owner run by Gordon; the agent user never holds the age key. The agent user keeps SSH to the node only for narrow runs that need no age key (for example site.yml --tags kubeconfig). site.yml sets ansible_user from cluster-vars ssh_user and become: true (D34). The operator chart pin in the role and in Git have one source of truth, so Renovate bumps both.
-Done checks: site.yml runs the three roles in §8 order (base-os, k3s, flux-operator). Gordon’s first and second live site.yml (p0a-14) prove the apply and its idempotence; no container re-run of this role. One PR.
+Done checks: site.yml runs the four roles in §8 order (base-os, node-disk, k3s, flux-operator). Gordon’s first and second live site.yml (p0a-14) prove the apply and its idempotence; no container re-run of this role. One PR.
 Timebox:     6h
 ```
 
@@ -276,7 +289,7 @@ Advances:    P0a exit check: “Renovate is installed and has opened at least on
 Advances:    P0a exit check: “Rollback drill: reverting a commit restores the prior state.”
 Depends on:  p0a-04, p0a-05, p0a-14, p0a-15, p0a-16, p0a-17
 Touches:     Makefile, tools/verify/p0a
-Hard limits: R35; R37. D17. About 50 lines, outside tools/checks/ so CI never runs it: live kubectl reads (every Flux object Ready, the restic Secret present in platform-backups with its value unprinted) and the evidence links (ci seed PRs, the Renovate PR, the rollback log). It does not re-run CI checks and has no tests of its own. Gordon’s second site.yml and second bootstrap-secrets are owner runs: it prints NEEDS GORDON for each, and the attached output includes his pastes. It stays in the repo so a rebuild re-runs it.
+Hard limits: R35; R37. D17. About 50 lines, outside tools/checks/ so CI never runs it: live kubectl reads (every Flux object Ready, the restic Secret present in platform-backups with its value unprinted, the role labels on each node) and the evidence links (ci seed PRs, the Renovate PR, the rollback log). It does not re-run CI checks and has no tests of its own. Gordon’s second site.yml and second bootstrap-secrets are owner runs: it prints NEEDS GORDON for each, and the attached output includes his pastes. It stays in the repo so a rebuild re-runs it.
 Done checks: make verify PHASE=p0a exits 0 on the live cluster with the Flux Ready list and the decrypt proof, lists the evidence links, and prints NEEDS GORDON for the two owner runs; the attached output includes Gordon’s pastes. One PR.
 Timebox:     2h
 ```
@@ -324,18 +337,6 @@ Proven by:   The R31 CI check (added with the first PVC, p0b-09) and the P0b and
 ```
 
 ### Build
-
-```text
-ID:          p0b-02a
-Goal:        Declare each node’s roles and optional data disk in env values, and have Ansible prepare the disk before any volume exists (D42).
-Why:         Volumes and backups need a known home before p0b-09, and envs with several nodes differ in roles and disks (R3, R31).
-Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
-Depends on:  p0a-12
-Touches:     envs/env-01/values/nodes.yaml, services/hermes/core/schema/, infra/ansible/roles/node-disk, infra/ansible/roles/k3s (node labels), infra/ansible/site.yml
-Hard limits: R1; R3; R4; R31. D3; D42. The disk is named by a stable /dev/disk/by-id path, never a kernel name. Ansible refuses to wipe without both the committed confirm flag and a matching run-time confirmation, and never touches a disk that holds the root filesystem or is mounted. A disk already marked as this env’s Jarvis data disk is mounted, never wiped. local_path_data and backup_path do not change: they sit under the data mount, or on the root disk when a node has none. Only one server node (control-plane) is built; other roles are labels.
-Done checks: The env schema rejects an unknown role, a node not in the inventory, a data disk without a by-id path, and an env without exactly one control-plane node (small tests). On bench.lan, Gordon’s confirmed site.yml (an owner run) wipes and mounts the data disk and his second site.yml changes nothing; without the run-time confirmation it stops before touching the disk. kubectl shows the role labels on the node. One PR.
-Timebox:     6h
-```
 
 ```text
 ID:          p0b-03
@@ -405,7 +406,7 @@ Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suff
 Depends on:  p0b-04, p0b-05, p0b-06, p0b-07
 Touches:     platform/testapp/
 Hard limits: R5; R28. D12. Hostname testapp.alpha.lan. The app is a platform fixture, not an app-<name> hosted app (that isolation is P4a, R30).
-Done checks: Gordon sets router forwarding of alpha.lan and trusts the root cert on the bastion before the LAN curl. curl from the LAN to https://testapp.alpha.lan returns the known file and the cert chains to the internal CA. The tailnet half is NEEDS GORDON (D17). One PR.
+Done checks: Gordon sets router forwarding of alpha.lan and trusts the root cert on the controller before the LAN curl. curl from the LAN to https://testapp.alpha.lan returns the known file and the cert chains to the internal CA. The tailnet half is NEEDS GORDON (D17). One PR.
 Timebox:     6h
 ```
 
@@ -414,7 +415,7 @@ ID:          p0b-09
 Goal:        Add the R31 PVC backup-entry check, run the VolSync backup-and-restore test (if it fails, install the single restic CronJob), then apply retention and the weekly prune.
 Why:         OQ7 is a Phase 0 test with one fallback and no further searching (R31, §4).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
-Depends on:  p0b-02, p0b-02a, p0a-14
+Depends on:  p0b-02, p0a-14
 Touches:     tools/checks/pvc-backup, platform/backups/controller, platform/backups/config
 Hard limits: R9; R31. No local S3 server. No volume snapshot controller. D3; D15; D30; D42. VolSync schedules take TZ from cluster-vars. The ~10-minute test writes the choice into the backup CONTRACT.md config section. The R31 check lands in this task, no later than the test volume, and stays small (about 60 lines): every PVC has a ReplicationSource or the p0b-02 backup: none annotation inside the allow-list. StatefulSet template handling waits for the first StatefulSet (P1).
 Done checks: A seeded PR with a PVC that has neither a backup entry nor backup: none fails ci. The log shows the VolSync test result and either a working VolSync ReplicationSource or the one CronJob, writing to backup_path. Retention in cluster-vars is 7 daily / 4 weekly / 3 monthly (§7). One PR.
@@ -705,7 +706,7 @@ Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seed
 Advances:    P0a exit check: “One required check on main, ci, runs every tools/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class; a check added later is seeded in the task that adds it, such as the PVC backup-entry check at P0b and the stale render at P2).”
 Depends on:  p2-06b, p0a-05
 Touches:     tools/render-profiles, envs/env-01/rendered/, tools/checks/render-diff
-Hard limits: R4. rendered/ is generated and never hand-edited. The stale-render seed is the one P0a deferred until this render existed.
+Hard limits: R4. rendered/ is generated and never hand-edited. The stale-render seed lands with this render.
 Done checks: A fresh render matches rendered/. A seeded PR that edits rendered/ without rerendering fails ci. One PR.
 Timebox:     6h
 ```
@@ -962,12 +963,12 @@ No new §5 contract. The skill contract remains the one written in P2.
 
 ```text
 ID:          p3-00
-Goal:        Add make google-consent, the OAuth loopback flow on the bastion.
+Goal:        Add make google-consent, the OAuth loopback flow on the controller.
 Why:         The Gmail and Calendar token has to be sealed before a bot reads mail (R15, R25).
 Advances:    P3 exit check: “The morning brief arrives at its scheduled time with calendar, email and weather (Open-Meteo, attributed; “weather unavailable” if it is down), and reaches Telegram [G].”
 Depends on:  p0a-04, p2-25
 Touches:     tools/google-consent, Makefile
-Hard limits: R15; R25. D40. Loopback flow on the bastion. Scopes are gmail.readonly, gmail.compose, and calendar.readonly only. The token is written through make seal into SOPS, then into WORKSPACE_MCP_CREDENTIALS_DIR/<email>.json with USER_GOOGLE_EMAIL set. That credentials file stays writable so the server can refresh it.
+Hard limits: R15; R25. D40. Loopback flow on the controller. Scopes are gmail.readonly, gmail.compose, and calendar.readonly only. The token is written through make seal into SOPS, then into WORKSPACE_MCP_CREDENTIALS_DIR/<email>.json with USER_GOOGLE_EMAIL set. That credentials file stays writable so the server can refresh it.
 Done checks: A fixture loopback run seals a token whose scopes are only those three. One PR.
 Timebox:     4h
 ```
