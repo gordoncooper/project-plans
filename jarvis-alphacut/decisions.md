@@ -22,7 +22,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D3
 
-- Decision: local-path data is `/var/lib/jarvis/local-path`. The backup path is `/var/lib/jarvis/backup`. When a node has a data disk, `/var/lib/jarvis` is its mount point, so the paths stay the same (D42, proposed).
+- Decision: local-path data is `/var/lib/jarvis/local-path`. The backup path is `/var/lib/jarvis/backup`. When a node has a data disk, `/var/lib/jarvis` is its mount point, so the paths stay the same (D42).
 - Reason: both directories are required and neither path is named.
 - Where: Ansible, VolSync, etcd snapshots (`p0a-12`, `p0b-09`).
 - Status: accepted-with-plan default.
@@ -131,7 +131,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D17
 
-- Decision: `make verify PHASE=<phase>` is a short checklist (`tools/verify/<phase>`, about 50 lines, no tests of its own) that runs the live reads the agent user can run and lists the evidence links. Steps that need the age key (a full `site.yml`, `bootstrap-secrets`) are owner runs, and they and every `[G]` check print a `NEEDS GORDON` line. The attached output includes his pasted result, and Gordon reviewing it is the gate. The “another ID gets none” check uses a gateway-handler fixture for the non-allow-listed ID.
+- Decision: `make verify PHASE=<phase>` is a short checklist (`tools/verify/<phase>`, about 50 lines, no tests of its own) that runs the live reads the agent user can run and lists the evidence links. Steps that need the age key (a full `site.yml`, `bootstrap-secrets`) are owner runs by Gordon; the agent user keeps node SSH only for narrow runs that need no age key (for example `site.yml --tags kubeconfig`). Owner runs and every `[G]` check print a `NEEDS GORDON` line. The attached output includes his pasted result, and Gordon reviewing it is the gate. The “another ID gets none” check uses a gateway-handler fixture for the non-allow-listed ID.
 - Reason: §2 requires attached verify output, and reserves `[G]` checks and full `site.yml` runs for Gordon. The age key is never on the agent user (R25, §8). No second Telegram account is available, so the non-allow-listed ID is a fixture.
 - Where: every phase verify task.
 - Status: accepted-with-plan default.
@@ -222,8 +222,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D30
 
-- Decision: container memory stays inside the §7 budgets. Starting requests: VictoriaMetrics 512Mi, VictoriaLogs 512Mi, Grafana 256Mi, Gatus 128Mi, Fluent Bit 64Mi, vmagent 128Mi, node-exporter 64Mi, kube-state-metrics 64Mi, Hermes ops 2Gi with a 3Gi limit, Hermes code-factory 1Gi with a 2Gi limit, each platform container 128Mi request and 256Mi limit. A platform container may be raised only while the platform total stays near 2Gi. Every container has a CPU request and no CPU limit.
-- Reason: R5 requires numbers and §7 gives budgets, not per-container sizes.
+- Decision: container memory stays inside the env’s budgets (framework §7), set in `cluster-vars.yaml` and schema-validated. The numbers here are the schema defaults for the full cluster; env-01 sets Hermes ops 1.5Gi request with a 2Gi limit, Hermes code-factory 512Mi with a 1Gi limit, and a platform total near 1.5Gi, so it fits 14 GiB with ≥30% free. Default starting requests: VictoriaMetrics 512Mi, VictoriaLogs 512Mi, Grafana 256Mi, Gatus 128Mi, Fluent Bit 64Mi, vmagent 128Mi, node-exporter 64Mi, kube-state-metrics 64Mi, Hermes ops 2Gi with a 3Gi limit, Hermes code-factory 1Gi with a 2Gi limit, each platform container 128Mi request and 256Mi limit. A platform container may be raised only while the platform total stays near 2Gi. Every container has a CPU request and no CPU limit.
+- Reason: R5 requires numbers and §7 gives budgets, not per-container sizes. One fixed budget cannot fit both a small test node and the full cluster, so sizes are env values (R3).
 - Where: every manifest task.
 - Status: accepted-with-plan default.
 
@@ -306,7 +306,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D42
 
-- Decision (proposed, not yet accepted): node roles and disks are env values in a new `envs/<env>/values/nodes.yaml`, validated by the env schema and read by Ansible only (not rendered into the Flux cluster-vars ConfigMap). Shape:
+- Decision: node roles and disks are env values in a new `envs/<env>/values/nodes.yaml`, validated by the env schema and read by Ansible only (not rendered into the Flux cluster-vars ConfigMap). Shape:
 
   ```yaml
   nodes:
@@ -320,7 +320,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Roles: exactly one `control-plane` (the k3s server with `--cluster-init`; joining more servers or agents is built when a second node exists). Each role becomes a node label `role.jarvis.lan/<role>=true` through k3s `node-label` (one key per role, since a node can hold several). `storage` marks nodes that may hold local-path volumes, `backup` the node whose `backup_path` holds the restic repository and etcd snapshots (exactly one per env for now), and `gpu` is a label only until §9 local models arrive.
   - Disks: a node with `data_disk` gets it at `/var/lib/jarvis`, so `local_path_data` and `backup_path` (D3) do not change, and k3s, local-path and VolSync need no new settings. The k3s data dir and container images stay on the root disk. A node without `data_disk` uses the same paths on the root disk.
   - Ansible (`node-disk` role, before k3s): resolve the by-id path and refuse if it is missing, holds the root filesystem, or is mounted. If the disk already carries this env’s Jarvis mark (filesystem label `jarvis-data` and `/var/lib/jarvis/.jarvis-env` holding the env name), mount it by UUID and change nothing else, so the second run is `changed=0`. Otherwise wipe only when `wipe_confirmed: true` and the operator passes the run-time confirmation `-e jarvis_wipe_confirm=<node>:<disk id>`; with either one missing, stop and print the disk’s model, size and partitions. A wipe makes one GPT partition, ext4 with label `jarvis-data`, an fstab entry by UUID, and the mark file. Ansible refuses to mount over a non-empty `/var/lib/jarvis` on the root disk; moving existing data is a manual step (or a rebuild).
-  - env-01: bench.lan holds every role, with `data_disk` set to the 1 TB Corsair MP600 Mini by its by-id path (to be read on the node with `ls -l /dev/disk/by-id/`; needs Gordon’s confirmation). The 100 GB root keeps the OS, k3s and images.
+  - env-01: bench.lan holds every role, with `data_disk` set to the 1 TB Corsair MP600 Mini by its by-id path, read from bench.lan (`ls -l /dev/disk/by-id/`). Gordon confirms it may be wiped at the wipe-and-rebuild. The 100 GB root keeps the OS, k3s and images.
 - Reason: Gordon (2026-10-20) wants disks and node roles as env config, root paths or a secondary disk per node, with a secondary disk wiped only after confirmation, so multi-node envs where only some nodes have a second disk work. Keeping the mount at the D3 paths means nothing above Ansible changes. Two keys (a committed flag plus a run-time confirmation) keep a stale flag or a copied env from wiping a disk.
-- Where: `p0b-02a` (new), before `p0b-09`. If accepted, framework §6 lists `values/nodes.yaml` and its role-label naming becomes `role.jarvis.lan/<role>=true`.
-- Status: proposed, not yet accepted.
+- Where: `p0b-02a`, before `p0b-09`; framework §6 lists `values/nodes.yaml` and the `role.jarvis.lan/<role>=true` labels.
+- Status: Accepted by Gordon 2026-10-20.
