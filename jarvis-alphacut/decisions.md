@@ -16,7 +16,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D2
 
 - Decision: the env-01 Ansible inventory host is `bench.lan`. The env stays named env-01.
-- Reason: it is the name the LAN DNS resolves, so no IP or alias is needed, and the inventory stays hostname-only (R25).
+- Reason: it is the name the LAN DNS resolves, so no IP or alias is needed, and the inventory holds no IPs (R25).
 - Where: `envs/env-01/inventory/hosts.yml` (`p0a-03`, `p0a-12`).
 - Status: Confirmed by Gordon 2026-10-19.
 
@@ -131,8 +131,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D17
 
-- Decision: `make verify PHASE=<phase>` is a short checklist (`tools/verify/<phase>`, about 50 lines, no tests of its own) that runs the live reads the agent user can run and lists the evidence links. Steps that need the age key (a full `site.yml`, `bootstrap-secrets`) are owner runs by Gordon; the agent user keeps node SSH only for narrow runs that need no age key (for example `site.yml --tags kubeconfig`). Owner runs and every `[G]` check print a `NEEDS GORDON` line. The attached output includes his pasted result, and Gordon reviewing it is the gate. The “another ID gets none” check uses a gateway-handler fixture for the non-allow-listed ID.
-- Reason: §2 requires attached verify output, and reserves `[G]` checks and full `site.yml` runs for Gordon. The age key is never on the agent user (R25, §8). No second Telegram account is available, so the non-allow-listed ID is a fixture.
+- Decision: `make verify PHASE=<phase>` (`tools/verify/<phase>`, short, no tests of its own) checks only what a machine can check from the controller as the agent user. It waits for or reads live state (for example `kubectl wait --for=condition=Ready` on Flux objects) and compares it with the repo (for example node role labels against inventory groups, D42). It exits non-zero on any miss, including when it finds zero objects, and prints no reminder or placeholder lines. Everything else is the owner checklist written in that phase’s verify step in the plan: owner runs, `[G]` checks and evidence links such as seed PRs. Gordon pastes those results with the attached script output, and his review is the gate. Steps that need the age key (a full `site.yml`, `bootstrap-secrets`) are owner runs by Gordon. The agent user keeps node SSH only for narrow runs that need no age key (for example `site.yml --tags kubeconfig`). The “another ID gets none” check uses a gateway-handler fixture for the non-allow-listed ID.
+- Reason: §2 requires attached verify output, and reserves `[G]` checks and full `site.yml` runs for Gordon. A script that echoes reminders proves nothing, and no person’s name belongs in the repo (§11 code design). The age key is never on the agent user (R25, §8). No second Telegram account is available, so the non-allow-listed ID is a fixture.
 - Where: every phase verify task.
 - Status: accepted-with-plan default.
 
@@ -306,21 +306,30 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D42
 
-- Decision: node roles and the optional data disk live in `envs/<env>/values/nodes.yaml`, schema-validated and read by Ansible only:
+- Decision: node roles are Ansible inventory groups in `envs/<env>/inventory/hosts.yml`. A node’s optional data disk is a host var in `envs/<env>/inventory/host_vars/<host>.yml`. The env schema validates both in CI, and there is no separate nodes file.
 
   ```yaml
-  nodes:
-    bench.lan:                         # an inventory host
-      roles: [control-plane, worker, storage, backup]   # allowed: control-plane, worker, storage, backup, gpu
-      data_disk:                       # optional; omit it and data stays on the root disk
-        id: /dev/disk/by-id/<stable id>   # never /dev/nvmeXnY
-        wipe_confirmed: true
+  # envs/<env>/inventory/hosts.yml
+  all:
+    children:
+      control_plane: {hosts: {bench.lan: }}   # allowed groups: control_plane, workers, storage, backup, gpu
+      workers:       {hosts: {bench.lan: }}
+      storage:       {hosts: {bench.lan: }}
+      backup:        {hosts: {bench.lan: }}
+
+  # envs/<env>/inventory/host_vars/bench.lan.yml
+  data_disk:                          # optional; omit it and data stays on the root disk
+    id: /dev/disk/by-id/<stable id>   # a whole disk; never /dev/nvmeXnY or a -partN path
+    wipe_confirmed: true
   ```
 
-  - Roles: exactly one `control-plane` (the k3s server) and exactly one `backup` node. Each role becomes `role.jarvis.lan/<role>=true` through k3s `node-label` in `config.yaml` at first start, since k3s applies labels only when a node registers.
-  - Disk: the data disk mounts at `/var/lib/jarvis`, so the D3 paths do not change; without one, the same paths sit on the root disk. k3s and images stay on root. Layout: `local-path/` (PVC volumes), `backup/etcd-snapshots/`, `backup/restic/` (VolSync repositories), `.jarvis-env` (the mark). Backups on the same disk cover mistakes and rollback, not disk loss; off-site is deferred (R31).
-  - Safety (`node-disk` role, after base-os, before k3s first starts): refuse a missing, root or mounted disk. A disk with this env’s mark (label `jarvis-data` plus `.jarvis-env`) is mounted, never wiped. Otherwise wipe only with both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>`; with either missing, stop and print the disk’s model, size and partitions. Never mount over a non-empty `/var/lib/jarvis`.
-  - env-01: bench.lan holds every role; its data disk is the 1 TB Corsair MP600 Mini, by the by-id path read from bench.lan. Gordon confirms it may be wiped at the wipe-and-rebuild.
-- Reason: Gordon (2026-10-20) wants roles and disks as per-node env config for future multi-node envs, with a secondary disk wiped only after confirmation. Two keys keep a stale flag or a copied env from wiping a disk.
-- Where: `p0a-11a`, before `p0a-12` (k3s); framework §6.
+  - Groups: the names use underscores, never hyphens. The schema rejects an unknown group name, a host_vars file for a host that is not in the inventory, and any host_vars key other than `data_disk` (no IPs, R25). It requires exactly one host in `control_plane` (the k3s server) and exactly one in `backup`. A host may sit in several groups.
+  - Plays target groups: base-os runs on `all`, node-disk only on hosts that set `data_disk`, and the k3s server on `control_plane`. Labels come from each host’s `group_names` as `role.jarvis.lan/<group>=true`, written to k3s `node-label` in `config.yaml` at first start, since k3s applies labels only when a node registers.
+  - Roles are declared, never auto-detected. Before it changes anything, site.yml asserts each declared role against facts. A `gpu` host must have an NVIDIA device. A `storage` or `backup` host must have the data path: `/var/lib/jarvis`, which must be the mounted `jarvis-data` filesystem when `data_disk` is set. That way a `nofail` boot without the disk never puts data on root.
+  - Disk: the data disk mounts at `/var/lib/jarvis`, so the D3 paths do not change; without one, the same paths sit on the root disk. k3s and images stay on root. The filesystem label `jarvis-data` identifies the disk, and fstab mounts it by `LABEL=jarvis-data` with `nofail`. Layout: `local-path/` (PVC volumes), `backup/etcd-snapshots/`, `backup/restic/` (VolSync repositories). Backups on the same disk cover mistakes and rollback, not disk loss; off-site is deferred (R31).
+  - Safety (`node-disk` role, after base-os, before k3s first starts): refuse a missing disk, a partition, the root disk, a disk mounted elsewhere, or a host where another disk already carries the label. A disk whose filesystem is labeled `jarvis-data` is mounted, never wiped. Any other disk is wiped only when both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>` are present. If either is missing, the role stops and prints the disk’s model, size and partitions. It never mounts over a non-empty `/var/lib/jarvis`.
+  - Public repo: the by-id path contains the disk’s serial number. That is accepted as low risk.
+  - env-01: bench.lan is in `control_plane`, `workers`, `storage` and `backup`. Its data disk is the 1 TB Corsair MP600 Mini, by the by-id path read from bench.lan. Gordon confirms it may be wiped at the wipe-and-rebuild.
+- Reason: Gordon (2026-10-20) wants roles defined in the inventory, where Ansible already targets hosts. Groups give plays native targeting, and `group_names` gives the labels without a second list. Checking declared roles against facts catches a wrong inventory without guessing roles. A label mount survives device renames. Two keys keep a stale flag or a copied env from wiping a disk.
+- Where: `p0a-11a` (before `p0a-12`), `p0a-12`, `p0a-13`, `p0a-18`; framework §5 and §6.
 - Status: Accepted by Gordon 2026-10-20.
