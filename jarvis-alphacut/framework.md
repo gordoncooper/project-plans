@@ -289,7 +289,7 @@ R33. Upgrades: images are pinned by digest and upgraded by Renovate PRs. k3s is 
 
 R34. Git on the env’s code delivery provider (GitHub, §5) is the one source of truth. No hand edits in the cluster; coding agents change it only through Git and make targets; any mirror is read-only. Why: one main. Enforced by: Flux owns cluster state; the Cursor CLI deny list (.cursor/cli.json) blocks direct kubectl writes, helm, ssh and secret decryption (a guardrail that shell wrappers can bypass).
 
-R35. Coding agents build. Every plan task is written in the brief template (goal, why, hard limits, done checks, timebox). Done means evidence attached (test output, health check, commit). A task past its timebox shows a failed state. Why: outcome-focused, no hung work. Enforced by: PR template.
+R35. Coding agents build. Every plan task is written in the brief template (goal, why, hard limits, done checks). Done means evidence attached (test output, health check, commit). A brief may set a timebox; a task past its brief’s timebox stops and reports a failed state. Why: outcome-focused, no hung work. Enforced by: PR template.
 
 R36. Until the P2 exit, agents merge their own PRs when required checks pass. From the P2 exit, branch protection on the default branch of jarvis and jarvis-apps requires green CI plus one gate check, admin-gate: the reusable .github/workflows/admin-gate.yml sparse-checks out only tools/checks/admin-gate at the pinned jarvis SHA and runs it on the event. It fails any PR that touches a protected path (jarvis: envs/*/secrets/, envs/*/values/apps.yaml, platform/backups/, infra/, services/hermes/core/config/, tools/checks/, tools/verify/, rulebooks/, docs/code-delivery/, docs/build-agent/, AGENTS.md, CLAUDE.md, .cursor/, .github/ and .sops.yaml; jarvis-apps: .github/, AGENTS.md and CLAUDE.md), removes a Namespace, PVC or StorageClass, or comes from the code-factory App, unless it carries an admin-approved label added by Gordon’s own GitHub account, the repository owner (the R40 label-actor pattern; github.repository_owner assumes user-owned repos, and a move to an org makes the approver a repo variable). The gate runs on pull_request_target (opened, synchronize, reopened, labeled, unlabeled), reads PR metadata only and never checks out PR code, and removes admin-approved on every new push; the jarvis-apps caller uses the same trigger. Everything else still merges on green. Code-factory PRs stay draft; Gordon labels and merges them. In project-plans (framework and plan, §11), only Gordon merges; gordon5417-ai may open PRs. Why: gate only what is risky, once there is something to protect; agents never edit the rules they follow; works on free GitHub, which does not enforce CODEOWNERS review. Enforced by: branch protection requiring admin-gate (seeded P2 checks); on project-plans, only Gordon merges (by convention; gordon5417-ai opens PRs only).
 
@@ -398,11 +398,12 @@ Two repos: jarvis (infra, platform, services) and jarvis-apps (apps JARVIS hosts
 jarvis/
   AGENTS.md                    lean pointer to the rulebooks
   Makefile                     render | check | verify | hermes-backup | bootstrap-secrets | seal | google-consent (wraps tools/)
-  .sops.yaml                   age recipients; one creation rule per env, keyed on envs/<env>/ (a new env adds its own rule, D45)
+  .sops.yaml                   age recipients; one creation rule per env, keyed on envs/<env>/secrets/ (a new env adds its own rule, D45)
   .cursor/cli.json             Cursor CLI permission list for coding agents (deny beats allow)
   renovate.json
   docs/                        README.md (points to project-plans for the framework, plan and decisions; never copies them), CONTRACT.template.md, code-delivery/CONTRACT.md (provider contract; github only), build-agent/CONTRACT.md (agent contract; cursor only)
   rulebooks/coding-agents.md
+  schema/                      env schema: the validator for every env, its tests and CONTRACT.md (D7)
   tools/                       render-profiles, bootstrap-secrets, seal, google-consent, hermes-backup, checks/ (one script per CI rule, including admin-gate), verify/ (one short checklist per phase)
   infra/                       layer 1: nodes (Ansible only)
     inventory/roles.yml        the one constructed config that turns node_roles into groups (D42)
@@ -418,7 +419,7 @@ jarvis/
     observability/             victoria-metrics, victoria-logs, fluent-bit, vmagent, grafana/{dashboards,alerts}, gatus
     hermes/
       core/                    base/ (Kustomize), config/ (defaults, write_approval, toolset policy),
-                               skills/ (geo/: in-repo read-only MCP server), glue/ (render lib, startup sync), schema/ (profile, env),
+                               skills/ (geo/: in-repo read-only MCP server), glue/ (render lib, startup sync), schema/ (profile schema and its CONTRACT.md),
                                templates/profile/, testing/ (mock MCP, grader), CONTRACT.md
       deploy/ops/              overlay of core/base; profiles/{concierge,inbox,homelab}/{SOUL.md,profile.yaml,skills/,evals/}
       deploy/code-factory/     overlay of core/base; profiles/{foreman,spec-writer}/; lanes/{builder,checker}/, lanes/agents/cursor.sh (build agent adapter);
@@ -444,7 +445,7 @@ jarvis-apps/
     _template/                 CONTRACT.md, app.yaml (source, port, health path), deploy/ (namespaced objects only), Dockerfile or src/
     <app>/                     own code, or a pinned upstream ref built to GHCR
   .github/
-    workflows/                 code-factory.yml (issues: labeled caller of jarvis code-factory-lane.yml@<sha>, passing jarvis_sha as an input for the lane checkout), build.yml (GHCR), ci.yml (calls jarvis admin-gate.yml@<sha> on pull_request_target)
+    workflows/                 code-factory.yml (issues: labeled caller of jarvis code-factory-lane.yml@<sha>, passing jarvis_sha as an input for the lane checkout), build.yml (GHCR), ci.yml (calls jarvis admin-gate.yml@<sha> on pull_request_target, passing the same SHA as an input for the admin-gate checkout)
 ```
 
 ### Env model
@@ -608,11 +609,11 @@ OQ10. Closed 2026-10-19, approved by Gordon: node OS = Ubuntu 26.04 Server, mini
 ## 11. Rules for the plan
 
 - Plan: Cursor writes jarvis-alphacut/plan.md in project-plans, one section per checkpoint (P0a, P0b, P1, P2, P3, P4a, P4b, as outlined in §2), with every task in the brief template; Gordon merges it, and coding agents build from the merged plan.
-- Must require: every plan task written in the coding-agent brief template (goal, why, hard limits, done checks, timebox), and a single list of Gordon-only actions (§8).
+- Must require: every plan task written in the coding-agent brief template (goal, why, hard limits, done checks), and a single list of Gordon-only actions (§8).
 - Brief template: the core above is required. Also add an ID, depends-on (task IDs) and a short “touches” (rough area or paths; a best guess is fine). These are guidance, not rigid fields.
 - Traceability: each task cites the exit check(s) it advances.
 - Each checkpoint: the §5 contracts tagged with it are written first as CONTRACT.md with “proven by”; its exit checks stay verbatim, with [G] kept; done = attached make verify PHASE=<checkpoint> output. Rules are cited by surviving number.
-- Task size: each task fits one PR and one timebox (Cursor sets it; split anything over ~1 day).
+- Task size: each task fits one PR (split anything over ~1 day).
 - Lean standard (the coding-agent rulebook carries it): build only what the task’s done check needs, and build it well. Tests encode a rule or a behavior, never a copied file or task list, and never re-run what CI already runs. The live run is the proof where there is one; a container proves only files, units and idempotence, so hardware proofs (Example: chrony NTS) are live checks. Prefer a config file’s own validation (Ansible validate:). No local tool that duplicates a hosted service. Hardening ideas go in the PR report as notes, not code. Keep every cheap check that guards a rule already in force.
 - Code design (the same rulebook carries it): Ansible uses modules and facts; shell only where no module exists. Required config fails loudly; a default lives once, in the env schema, and role defaults/ hold nothing that looks like env config (product constants go in vars/, D46). Tags sit at role or play level. Tests are named for the behavior they prove and never match file text. Verify scripts check and fail; they never echo. No person’s name and no environment-identity value appears in core (D44); env-00 is the multi-node fixture (D43).
 - Review: design is judged first. A bad design (wrong data model, logic in the wrong layer, duplicated config, echo-only checks) is redone, not patched. A sound design gets one fix round; after it, only real bugs block and the rest become notes. Reviewers block an unexplained file move and the removal of a check for a rule in force. Small low-risk PRs merge on reviewer approval plus green CI; docs, plan, design, infra and risky PRs go to Gordon first (R36 adds admin-gate from the P2 exit).
@@ -633,7 +634,6 @@ Depends on:  <task IDs, or none>
 Touches:     <rough area or paths, best guess>
 Hard limits: <rules and boundaries it must not cross>
 Done checks: <the one proof that shows the outcome: a live run, a seeded CI rule check, or a small behavior test>
-Timebox:     <hours, ≤ ~1 day>
 ```
 
 ## Appendix — Eval seeds
