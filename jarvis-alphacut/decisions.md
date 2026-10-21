@@ -306,27 +306,27 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D42
 
-- Decision: each node declares its roles and optional data disk in its own block in `envs/<env>/inventory/hosts.yml`. A standard constructed inventory config next to it turns the roles into real Ansible groups when the inventory loads. The env schema validates hosts.yml in CI. There are no host_vars and no separate nodes file.
+- Decision: each node declares its roles (`node_roles`) and optional data disk in its own block in `envs/<env>/inventory/hosts.yml`. One constructed inventory config in core, `infra/inventory/roles.yml`, is passed as a second `-i` after the env inventory (`-i envs/<env>/inventory/hosts.yml -i infra/inventory/roles.yml`). It turns the roles into real Ansible groups when the inventory loads, and no env copies it. The env schema validates hosts.yml in CI. There are no host_vars and no separate nodes file.
 
   ```yaml
   # envs/<env>/inventory/hosts.yml
   all:
     hosts:
       <host>:
-        roles: [control_plane, workers, storage, backup]   # known: control_plane, workers, storage, backup, gpu, edge
+        node_roles: [control_plane, workers, storage, backup]   # known: control_plane, workers, storage, backup, gpu, edge
         data_disk: {id: /dev/disk/by-id/<stable id>, wipe_confirmed: true}   # optional; a whole disk, never /dev/nvmeXnY or -partN
 
-  # envs/<env>/inventory/roles.yml (the same in every env)
+  # infra/inventory/roles.yml (core; one copy for every env)
   plugin: ansible.builtin.constructed
   strict: true
   keyed_groups:
-    - key: roles
+    - key: node_roles
       prefix: ""
       separator: ""
   ```
 
   - Groups: the empty prefix and separator name each group exactly after its role (`control_plane`, `workers`, `storage`, `backup`, `gpu`, `edge`; underscores, never hyphens). So `--limit storage`, `ansible-inventory --graph` and `hosts: storage` in plays all work.
-  - Schema: roles must come from the known set. There must be exactly one `control_plane` host and exactly one `backup` host. `data_disk` must have that shape. A host block allows no other keys (no IPs, R25).
+  - Schema: `node_roles` must come from the known set (the name avoids Ansible’s reserved `roles` keyword). There must be exactly one `control_plane` host and exactly one `backup` host. `data_disk` must have that shape. A host block allows no other keys (no IPs, R25).
   - Plays target groups: base-os runs on `all`, node-disk only on hosts that set `data_disk`, and the k3s server on `control_plane`. The k3s config sets `node-name` from `inventory_hostname`.
   - Labels: each host gets `role.<dns_suffix>/<role>=true` for each of its roles; the `role.<dns_suffix>/` prefix is reserved for these labels. A task on `control_plane` applies them with the kubernetes.core module on every run. It removes prefixed labels for roles a host no longer has, so role changes are reconciled. k3s `node-label` is not used, because it applies only at registration. Verify flags any drift (D17).
   - Edge (optional): ports 80/443 (Traefik) and 53 (JARVIS DNS) land on the `control_plane` node unless an env gives `edge` to one or more nodes. This is a deliberate rule, not a silent default. The label task sets servicelb’s node-selection label (`svccontroller.k3s.cattle.io/enablelb=true`) on the edge nodes, or on the `control_plane` node when no node is edge. servicelb then binds those ports only there.
@@ -347,7 +347,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Every host except `wk-4` has an inline `data_disk` with a made-up by-id path, and `wipe_confirmed` is true on some and false on others. `wk-4` keeps its data on the root disk.
   - Values set every key the schema allows, using example values: `dns_suffix: env-00.example`, `flux_git_repo_url: https://github.com/example-owner/jarvis`, `apps_git_repo_url: https://github.com/example-owner/jarvis-apps`, an example `llm_provider_host`, and an example `ssh_user`. The owner handle `example-owner` comes from the repo URLs. No value is copied from a real env.
   - It has no `secrets/`, no SOPS group_vars and no `flux/`, because it never deploys and the schema does not require them. If a later schema key needs a SOPS file, it gets a clearly fake placeholder encrypted to a throwaway test key, under env-00’s own `.sops.yaml` rule (D45).
-  - CI validates it like any env. A behavior test asserts that env-00 sets every key the schema allows, so a new schema key fails CI until env-00 sets it. CI also runs `ansible-inventory --graph` on its inventory, plus the role and fact asserts in check mode where they need no host (the roles rules, the groups the constructed config builds, the label set).
+  - CI validates it like any env. A behavior test asserts that env-00 sets every key the schema allows, so a new schema key fails CI until env-00 sets it. CI also runs `ansible-inventory --graph` on its inventory, plus the role and fact asserts in check mode where they need no host (the `node_roles` rules, the groups the core constructed config builds, the label set).
 - Reason: Gordon (2026-10-20): Jarvis is a product, not a home-lab pet, so its core is proven against a full multi-node env, not only the one-node env-01. Requiring every key catches schema keys the example forgot.
 - Where: `p0a-05a`, extended by `p0a-11a`; used by `p0a-11` and `p0a-12`; framework §5 and §6.
 - Status: Proposed; accepted when the owner merges this PR.
@@ -372,7 +372,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D45
 
 - Decision: how env settings are defined and reach the cluster.
-  - `apps_git_repo_url`: required and https, validated like `flux_git_repo_url`. It names the apps repo for app hosting, admin-gate and the code-factory. core-names also reads its slug and owner handle (D44).
+  - `apps_git_repo_url`: required and https, validated like `flux_git_repo_url`. The owner handle in `flux_git_repo_url` and `apps_git_repo_url` must be the same across all non-example envs, so every env in one repo shares one owner, and admin-gate has one owner to trust. The schema enforces this. It names the apps repo for app hosting, admin-gate and the code-factory. core-names also reads its slug and owner handle (D44).
   - `llm_provider_host`: the AI provider’s API hostname. Hermes and the Gatus provider probe both read it, and the p2-18 drill overrides it.
   - Flux variables are the lowercase cluster-vars ConfigMap keys (`${dns_suffix}`, never `${DNS_SUFFIX}`), and lists are JSON strings. postBuild substitution is strict: the kustomize-controller `StrictPostBuildSubstitutions` feature gate, set through the FluxInstance, makes a missing variable fail instead of becoming empty.
   - `.sops.yaml` has one age creation rule per env, keyed on `envs/<env>/`. A new env adds its own rule.
