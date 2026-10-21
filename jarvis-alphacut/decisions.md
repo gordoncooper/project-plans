@@ -349,12 +349,14 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D44
 
-- Decision: environment-identity values never appear in the repo’s core. Each kind is a GitHub Actions repo variable, with an env var of the same name for local runs. The kinds are the owner’s personal name, the GitHub owner and account handles, the repo slug (`<owner>/<repo>`), node hostnames, login usernames (home paths `/home/<user>` derive from them) and the LAN domain. Lists are comma-separated.
-  - The core-names check (`tools/checks/core-names`) holds no values. It reads only these variables and fails loudly when one is unset in CI. It scans `infra/`, `platform/`, `services/`, `tools/`, `docs/`, every README and `rulebooks/`. Matching is case-insensitive on word boundaries, so a handle inside a URL is caught and a substring of a longer word is not.
+- Decision: environment-identity values never appear in the repo’s core, and each has one source of truth.
+  - Values that live in env settings are read from there. The core-names check (`tools/checks/core-names`) reads them from every `envs/<env>` except env-00: inventory hostnames, `ssh_user`, `dns_suffix`, and the repo slug (`<owner>/<repo>`) and owner handle from the env’s repo URL. It derives `/home/<user>` paths from the usernames. A new env is covered automatically.
+  - Only values that never live in the repo come from a GitHub Actions repo variable, with an env var of the same name for local runs. Today that is just the owner’s personal name. The check fails loudly when that variable is unset in CI.
+  - The check holds no values of its own. It scans `infra/`, `platform/`, `services/`, `tools/`, `docs/`, every README and `rulebooks/`. Matching is case-insensitive on word boundaries, so a handle inside a URL is caught and a substring of a longer word is not.
   - `envs/<env>/` may hold hostnames, the repo URL with its owner handle, usernames and the domain, because that is env config. The owner’s personal name is allowed nowhere, `envs/` included.
-  - The repo is matched as its slug, because the bare repo name is the product name, which core may use. Generic words such as `ubuntu`, `agent` and `operator` are product defaults, not identity, so they stay out of the variables.
-  - Code that needs an identity value at run time, such as admin-gate’s owner account or the code-factory label-actor check, reads the same repo variable.
+  - The repo is matched as its slug, because the bare repo name is the product name, which core may use. Generic words such as `ubuntu`, `agent` and `operator` are product defaults, not identity, so they are never matched.
+  - Code that needs an identity value at run time, such as admin-gate’s owner account or the code-factory label-actor check, reads the owner handle from the env values.
   - The LAN domain is the env’s DNS suffix: `dns_suffix` in `cluster-vars.yaml`, schema-validated and reaching manifests as `DNS_SUFFIX` through postBuild. Hostnames, Ingress, the wildcard cert and the node-label prefix `role.<dns_suffix>/<group>` all derive from it.
-- Reason: Gordon (2026-10-20) wants core to read the same for any owner. Keeping the values in variables means the check never contains the names it guards.
+- Reason: Gordon (2026-10-20) wants core to read the same for any owner. Reading env settings, plus one variable for the name that never enters the repo, keeps one source of truth, and the check never contains the names it guards.
 - Where: `p0a-05` (`dns_suffix`), `p0a-07`, `p0a-12`, `p0a-18`, `p2-24`, the P4b label-actor check; framework R3, §5, §6, §8 and §11.
 - Status: Proposed; accepted when the owner merges this PR.
