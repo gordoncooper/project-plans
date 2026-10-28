@@ -359,7 +359,7 @@ Why:         The test app’s cert has to come from the internal CA, and rebuild
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-03
 Touches:     platform/cert-manager/controller, platform/cert-manager/config
-Hard limits: R5; R25; R28. The root key is a SOPS secret from make bootstrap-secrets, run by the agent user on the controller (D17): the script generates the key and encrypts it to the .sops.yaml recipient in one step, so the plaintext key is never written to disk or logs. The public root is plain text for Gatus and for devices. The CA lifetime is 10 years. Gordon keeps the calendar reminder (§8 custody). D30.
+Hard limits: R5; R25; R28. The root key is a SOPS secret from make bootstrap-secrets, run on the controller by Gordon or the agent user (D17): the script generates the key and encrypts it to the .sops.yaml recipient in one step, so the plaintext key is never written to disk or logs. The public root is plain text for Gatus and for devices. The CA lifetime is 10 years. Gordon keeps the calendar reminder (§8 custody). D30.
 Done checks: A Certificate for *.alpha.lan is Ready and the cert chains to the committed root. One PR.
 ```
 
