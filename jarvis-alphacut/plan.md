@@ -112,7 +112,7 @@ Why:         Git has to hold the §8 bootstrap secrets before Flux can decrypt o
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-03
 Touches:     tools/bootstrap-secrets, tools/seal, Makefile
-Hard limits: R7; R25; R35. The script creates the internal CA, the VolSync restic password and repository, the Grafana admin password, and each deploy’s Hermes API key, dashboard password hash, and signing secret (D16). It never overwrites. The real age private key stays out of CI (D33). D10: only the restic secret is referenced in-cluster at P0a. Both tools take an explicit env (D45).
+Hard limits: R7; R25; R35. The script creates the internal CA, the VolSync restic password and the rest-server login, the Grafana admin password, and each deploy’s Hermes API key, dashboard password hash, and signing secret (D16). It never overwrites. The real age private key stays out of CI (D33). D10: only the restic secret is referenced in-cluster at P0a. Both tools take an explicit env (D45).
 Done checks: A unit test with a throwaway age key shows a second run leaves the files byte-identical. make bootstrap-secrets runs on the controller, by Gordon or the agent user since it needs only the .sops.yaml public recipient (D17), and its SOPS output is committed. One PR.
 ```
 
@@ -334,7 +334,7 @@ Why:         Every PVC uses one shared backup contract before VolSync is install
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0a-18
 Touches:     platform/backups/CONTRACT.md
-Hard limits: R31. D7. Target path, retention, and weekly prune come from cluster-vars.yaml. Restore is a ReplicationDestination with a written procedure. The opt-out is the unprefixed annotation backup: none on a PVC or on a volumeClaimTemplate’s metadata, allowed only under services/observability/victoria-metrics/ and services/observability/victoria-logs/. A StatefulSet’s volumes get one ReplicationSource per <template>-<statefulset>-<ordinal> PVC.
+Hard limits: R31. D7. Target path, retention, and weekly prune come from cluster-vars.yaml. Every PVC is enrolled by the backup policy, and restore is make restore (D47). The opt-out is the unprefixed annotation backup: none on a PVC or on a volumeClaimTemplate’s metadata, allowed only under services/observability/victoria-metrics/ and services/observability/victoria-logs/. The policy creates one ReplicationSource per claim, including each StatefulSet ordinal; none is written in Git.
 Done checks: CONTRACT.md has offers, expects, health, config, and proven by. One PR.
 Proven by:   The R31 CI check (added with the first PVC, p0b-09) and the P0b and P2 restore drills (§5).
 ```
@@ -414,19 +414,41 @@ Why:         OQ7 is a Phase 0 test with one fallback and no further searching (R
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0b-02, p0a-14
 Touches:     ci/checks/pvc-backup, platform/backups/controller, platform/backups/config
-Hard limits: R9; R31. No local S3 server. No volume snapshot controller (VolSync gets only the VolumeSnapshot CRD). D3; D15; D30. Prune is weekly through pruneIntervalDays: 7 (D15). The ~10-minute test ran early, right after p0b-03, as its own small PR and passed, so VolSync is the choice; the second PR writes that choice into the backup CONTRACT.md config section and adds the R31 check, retention and prune. The R31 check is small: every PVC and StatefulSet volumeClaimTemplate has a ReplicationSource or the p0b-02 backup: none annotation inside the allow-list. It does not see PVCs a HelmRelease renders; the restore drills cover those.
+Hard limits: R9; R31. No local S3 server. No volume snapshot controller (VolSync gets only the VolumeSnapshot CRD). D3; D15; D30. Prune is weekly through pruneIntervalDays: 7 (D15). The ~10-minute test ran early, right after p0b-03, as its own small PR and passed, so VolSync is the choice; the second PR writes that choice into the backup CONTRACT.md config section and adds the R31 check, retention and prune. The R31 check is small: every PVC and StatefulSet volumeClaimTemplate has a ReplicationSource or the p0b-02 backup: none annotation inside the allow-list. It does not see PVCs a HelmRelease renders; p0b-09b replaces it. Outcome: VolSync stays; the follow-up is the rest-server and the enrollment policy (p0b-09a, p0b-09b), not another tool search.
 Done checks: A seeded PR with a PVC that has neither a backup entry nor backup: none fails ci. The log shows the VolSync test result and either a working VolSync ReplicationSource or the one CronJob, writing to backup_path. Retention in cluster-vars is 7 daily / 4 weekly / 3 monthly (§7). Two PRs.
 ```
 
 ```text
-ID:          p0b-10
-Goal:        Run the checksum restore drill and show an etcd snapshot file on the backup path.
-Why:         P0b has to prove a deleted volume comes back with the same checksum, and that an etcd snapshot exists for same-node rollback (R31).
+ID:          p0b-09a
+Goal:        Serve every restic repository from one restic rest-server, one repository per PVC.
+Why:         One server owns the backup path, so a new volume needs no storage of its own, and NFS later changes one volume (R31, D47).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
-Depends on:  p0b-09, p0a-12
-Touches:     platform/backups/ (drill volume)
-Hard limits: R31. The etcd snapshot is not restored in this drill. The drill runs by hand with kubectl reads; no drill helper. The volume drill uses the mechanism p0b-09 kept.
-Done checks: The log shows the original checksum, the delete, the restore, and the matching checksum, plus an etcd snapshot filename on the backup path. The drill volume is removed afterward. Ships in the p0b-11 PR.
+Depends on:  p0b-09
+Touches:     platform/backups/controller, platform/backups/CONTRACT.md, schema/CONTRACT.md, tools/bootstrap-secrets
+Hard limits: R5; R9; R25; R31. D3; D15; D42; D47. One Deployment and one ClusterIP Service named restic on port 8000 in platform-backups, no Ingress, pinned to role.${dns_suffix}/backup=true, storing in backup_path/restic. Each repository is rest:http://restic.platform-backups.svc.cluster.local:8000/<namespace>/<pvc>; a slash, not a hyphen, so two names cannot collide. One htpasswd user: the backups-restic Secret gains RESTIC_REST_USERNAME and RESTIC_REST_PASSWORD, never in the URL. No append-only, because the movers prune. No per-volume repo PV or PVC. The VolSync pod’s TZ is time_zone (D15). platform-backups drops privileged-movers once no mover there mounts a hostPath. etcd snapshots stay in backup_path/etcd-snapshots.
+Done checks: The rest-server is Ready on the backup node. A scratch volume, applied through Flux like the p0b-09 test and removed afterward, backs up through it and restores into an empty PVC with a matching checksum; the log is in the PR. One PR.
+```
+
+```text
+ID:          p0b-09b
+Goal:        Install Kyverno and the backup policy that enrolls every PVC, and change the R31 check to match.
+Why:         A new app has to be backed up without wiring by hand (R31, D47).
+Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
+Depends on:  p0b-09a
+Touches:     platform/kyverno/, platform/flux-operator/ (platform-controllers list), platform/backups/config, platform/backups/CONTRACT.md, ci/checks/pvc-backup
+Hard limits: R5; R9; R31. D15; D30; D47. The Kyverno 1.19 chart, classic ClusterPolicy only, reports and cleanup controllers off. The project tests it only up to Kubernetes 1.35, though it builds against the 1.36 libraries, so the first gate is the admission controller Ready; if it is not, stop and report (the rest-server stands). The policy sits on the platform-configs path, after the CRDs, with failurePolicy Ignore, generateExisting and synchronize. For each PVC not annotated backup: none and not labeled app.kubernetes.io/created-by: volsync (VolSync’s own cache and destination claims), it generates in the PVC’s namespace a Secret with that PVC’s repository and the shared credentials (a data generate with a lookup, since each repository differs) and a ReplicationSource: Direct, the backup schedule and retention from cluster-vars, pruneIntervalDays 7, a small cacheCapacity, and trigger.manual copied from a PVC annotation (on-demand backup, p2-20). A mutate-existing rule sets privileged-movers on that namespace; it lands asynchronously, so a first sync may fail once and pass on retry. Kyverno’s controllers get aggregated ClusterRoles for Secrets and ReplicationSources. StatefulSet claims need no per-ordinal object. ci/checks/pvc-backup now checks that the policy is present, that backup: none appears only under the p0b-02 allow-list, and that no ReplicationSource is written in Git (it would fight synchronize). The policy acts on live PVCs, so PVCs a HelmRelease renders are covered too.
+Done checks: Kyverno admission is Ready. A scratch PVC gets its Secret and ReplicationSource with no per-PVC manifest, and the source completes a sync; a PVC annotated backup: none gets neither. Seeded PRs fail ci: backup: none outside the allow-list, a hand-written ReplicationSource, and the policy removed. One PR.
+```
+
+```text
+ID:          p0b-10
+Goal:        Add make restore and make restore-all, run the checksum restore drill with them, and show an etcd snapshot file on the backup path.
+Why:         P0b has to prove a deleted volume comes back with the same checksum through the command a rebuild uses, and that an etcd snapshot exists for same-node rollback (R31).
+Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
+Depends on:  p0b-09b, p0a-12
+Touches:     Makefile, tools/restore, platform/backups/ (drill volume), platform/backups/CONTRACT.md
+Hard limits: R31. D47. The etcd snapshot is not restored in this drill. make restore APP=<app> suspends the app’s Flux Kustomization, scales its workloads to 0, and for each backed-up PVC applies one ReplicationDestination into the app’s own PVC (Direct, trigger.manual, restoreAsOf, enableFileDeletion), waits for lastManualSync, deletes it, then resumes. make restore-all runs it for every app with a backed-up PVC. restoreAsOf is a time before the loss, by default the PVC’s creation time, with an override: after a rebuild the new source backs up the fresh, empty app first, and the latest snapshot would restore that. No backup runs on a PVC while it is being restored. An empty repository restores nothing and succeeds. No dataSourceRef (D47). The drill runs make restore by hand, otherwise kubectl reads; no separate drill helper.
+Done checks: The log shows the original checksum, the delete, the make restore run, and the matching checksum, plus an etcd snapshot filename on the backup path. A restore of a PVC with no backup yet is a no-op. The drill volume is removed afterward. One PR.
 ```
 
 ```text
@@ -706,7 +728,7 @@ Advances:    P2 exit check: “A scripted prompt through the assistant API (/api
 Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).”
 Depends on:  p2-06b, p2-05, p1-08
 Touches:     services/hermes/deploy/ops/, envs/env-01 secrets references
-Hard limits: R5; R11; R13; R27; R28. D30; D39 (egress; hosts in the core CONTRACT.md as documentation). Namespace hermes-ops. No shared volume or secret with the other deploy. ServiceAccount: get, list, watch, no Secrets. The pod sets TZ from cluster-vars. The API key, password hash, and signing secret are the bootstrap Secrets, applied now that the namespace exists (D10). Its volume is the first app PVC with a backup (R31): VolSync’s moverVolumes cannot take a hostPath, so its restic repo is a hostPath PV plus PVC (DirectoryOrCreate) under backup_path, and the R31 check allows repo PVCs. VolSync reads the repo Secret and the privileged-movers annotation from the ReplicationSource’s own namespace, so hermes-ops gets its own copy of the restic Secret and the annotation. Hostname hermes-ops.alpha.lan.
+Hard limits: R5; R11; R13; R27; R28. D30; D39 (egress; hosts in the core CONTRACT.md as documentation). Namespace hermes-ops. No shared volume or secret with the other deploy. ServiceAccount: get, list, watch, no Secrets. The pod sets TZ from cluster-vars. The API key, password hash, and signing secret are the bootstrap Secrets, applied now that the namespace exists (D10). Its volume is the first app PVC with a backup (R31); the backup policy enrolls it, so the deploy carries no ReplicationSource, restic Secret or mover annotation (D47). A live SQLite copy can restore torn, so a consistent copy is on the volume before the nightly backup (Example: a dump written just before the backup hour). Hostname hermes-ops.alpha.lan.
 Done checks: The pod is Ready, https://hermes-ops.alpha.lan asks for login, and Gatus lists the endpoint. One PR.
 ```
 
@@ -828,7 +850,7 @@ Why:         Hermes upgrades break, and the pre-upgrade backup has to finish bef
 Advances:    P2 exit check: “A test Hermes bump PR shows auto-merge is off, its deploy waited for the digest-keyed pre-upgrade backup, and the evals then ran against the deployed bot (R33).”
 Depends on:  p2-17, p0b-09
 Touches:     services/hermes/deploy/ops/ Flux dependency, tools/hermes-backup, renovate.json
-Hard limits: R31; R33; R38. The ops Kustomization depends on a VolSync backup triggered by the new digest. Renovate does not auto-merge the Hermes digest. Gordon merges Hermes bump PRs. The code-factory deploy does not exist yet; this task covers the ops pin. The code-factory pin repeats the same pattern in p4b-05.
+Hard limits: R31; R33; R38. The ops Kustomization depends on a VolSync backup triggered by the new digest. make hermes-backup sets the PVC’s trigger annotation, which the policy copies into the generated source’s trigger.manual, quiesces or dumps SQLite first, waits for lastManualSync, then clears it so the schedule returns; nothing is added to Git (D47). Renovate does not auto-merge the Hermes digest. Gordon merges Hermes bump PRs. The code-factory deploy does not exist yet; this task covers the ops pin. The code-factory pin repeats the same pattern in p4b-05.
 Done checks: A test bump PR shows auto-merge off, the backup Job complete for that digest before the rollout, and the evals passing against the deployed bot. One PR.
 ```
 
@@ -839,7 +861,7 @@ Why:         Runtime edits must not survive a restart, and the Hermes volume nee
 Advances:    P2 exit check: “After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.”
 Depends on:  p2-06b, p2-16, p0b-10
 Touches:     ops volume, tools/verify/p2
-Hard limits: R12; R31. If the restored token is stale, Gordon redoes the device login (§8 custody) before chat is called again.
+Hard limits: R12; R31. D47. The restore is make restore APP=hermes-ops (p0b-10). If the restored token is stale, Gordon redoes the device login (§8 custody) before chat is called again.
 Done checks: The log shows a planted runtime edit gone after restart, and the restored volume’s checksum matching the backup. One PR.
 ```
 

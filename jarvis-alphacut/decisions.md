@@ -2,7 +2,7 @@
 
 Defaults chosen where `framework.md` is silent. Merging this file accepts all defaults except those marked Confirmed by Gordon.
 
-Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. Confirmed by Gordon 2026-10-20: D3, D42, D43, D44, D45, D46. The other entries are accepted-with-plan defaults.
+Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. Confirmed by Gordon 2026-10-20: D3, D42, D43, D44, D45, D46. Confirmed by Gordon 2026-10-28: D47. The other entries are accepted-with-plan defaults.
 
 These are the §11 defaults. They are recorded here. They are not copied into framework §10: this change adds only this file and `plan.md`.
 
@@ -118,9 +118,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D15
 
-- Decision: restic prunes weekly through VolSync’s `pruneIntervalDays: 7`, an interval, not a clock; the ReplicationSource CRD rejects `CRON_TZ`. The Hermes pod takes TZ from cluster-vars.
-- Reason: retention includes a weekly prune (§7), and VolSync schedules have no time zone. env-01’s time zone is America/Los_Angeles (D21).
-- Where: backup config (`p0b-09`), Hermes pod (`p2-09`).
+- Decision: the backup cron is read in the VolSync pod’s time zone, and that pod’s `TZ` is `time_zone` from cluster-vars. restic prunes weekly through `pruneIntervalDays: 7` on the backup run, an interval, not a clock; there is no Sunday cron. The Hermes pod takes TZ from cluster-vars too.
+- Reason: retention includes a weekly prune (§7), and VolSync’s cron has no time-zone field (the ReplicationSource CRD rejects `CRON_TZ`). env-01’s time zone is America/Los_Angeles (D21).
+- Where: backup config (`p0b-09`, `p0b-09a`, `p0b-09b`), Hermes pod (`p2-09`).
 - Status: accepted-with-plan default.
 
 ## D16
@@ -337,7 +337,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Labels: `role.<dns_suffix>/<role>=true` for each role; the prefix is reserved for them. A task on `control_plane` sets them with kubernetes.core on every run and removes prefixed labels for dropped roles. No k3s `node-label`, which applies only at registration.
   - Edge: 80/443 (Traefik) and 53 (App DNS) land on the `edge` nodes. Every env must give `edge` to at least one node; there is no fallback to `control_plane`, and the schema rejects an env with no `edge` host. The same task reconciles servicelb’s `svccontroller.k3s.cattle.io/enablelb=true` label onto exactly that set on every run.
   - Asserts: roles are declared, never detected. Before any change, a `gpu` host must have an NVIDIA device. On a host with `data_disk`, node-disk mounts `/var/lib/jarvis` by `LABEL=jarvis-data` before k3s runs; a failed mount stops the run.
-  - Disk: the data disk mounts at `/var/lib/jarvis` by `LABEL=jarvis-data` with `nofail`; k3s and images stay on root. Default layout: `local-path/`, `backup/etcd-snapshots/`, and one restic repo per PVC at `backup_path/<volume>`. Same-disk backups cover mistakes and rollback, not disk loss (R31).
+  - Disk: the data disk mounts at `/var/lib/jarvis` by `LABEL=jarvis-data` with `nofail`; k3s and images stay on root. Default layout: `local-path/`, `backup/etcd-snapshots/`, and `backup/restic/`, the rest-server’s data directory, with one restic repository per PVC under `<namespace>/<pvc>` and no repo PV (D47). Same-disk backups cover mistakes and rollback, not disk loss (R31).
   - Boot safety: node-disk adds a `k3s.service` drop-in with `RequiresMountsFor=` the configured `local_path_data` and `backup_path` (D3), so k3s never starts without the disk.
   - Wipe safety (node-disk, before k3s first starts): refuse the disk that holds `/`. A disk that already carries `jarvis-data` is mounted, never formatted. Any other disk is formatted only with both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>[,<node>:<disk id>...]`, in which each host must find its own exact pair; `wipe_confirmed: true` alone never permits it. Other cases (a disk mounted elsewhere, a second labelled disk, a non-empty mount point, LVM or btrfs root) are listed in the Ansible README as not checked and rely on the two confirmations.
   - The by-id path holds the disk serial; that is accepted as low risk in a public repo.
@@ -395,3 +395,15 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 - Reason: a setting no env changes is a constant; making it look configurable invites drift.
 - Where: `p0a-11`, `p0a-12`, `p0b-03`, the D39 egress tasks; framework §11.
 - Status: Confirmed by Gordon 2026-10-20.
+
+## D47
+
+- Decision: backups enroll themselves, and restore is one command.
+  - Enrollment: a Kyverno ClusterPolicy (classic, `failurePolicy: Ignore`, `generateExisting`, `synchronize`) generates each PVC’s restic Secret and VolSync ReplicationSource (`copyMethod: Direct`) in the PVC’s namespace, and sets `volsync.backube/privileged-movers` on that namespace. It skips PVCs annotated `backup: none` and VolSync’s own claims (`app.kubernetes.io/created-by: volsync`). No ReplicationSource is written in Git; the CI check guards the policy and the opt-out allow-list.
+  - Storage: one restic rest-server in `platform-backups`, pinned to the backup node, serves every repository from `backup_path/restic`, one per PVC at `<namespace>/<pvc>`, with one htpasswd user and no append-only.
+  - Restore: `make restore APP=<app>` and `make restore-all`. The app is suspended and scaled to 0, then one Direct ReplicationDestination with `trigger.manual`, `restoreAsOf` before the loss and `enableFileDeletion` fills the app’s own PVC and is deleted. An empty repository restores nothing.
+  - No volume populator and no PVC `dataSourceRef` while volumes are local-path.
+  - Running volumes are backed up nightly as a file-by-file copy, not a snapshot, so a database quiesces or dumps first (Hermes: `p2-09`, `p2-20`).
+- Reason: a new app is backed up just by having a PVC, with no per-app manifests to forget. One server removes the per-volume repo PV and PVC, its CI exception and most of the NFS rework (§9: only the server’s volume changes). The populator needs snapshot-based restores, which local-path cannot provide; its PVC stays Pending and cannot be fixed without deleting it. After a rebuild the new source backs up the fresh, empty app at once, so restoring the latest snapshot would restore the empty app; `restoreAsOf` skips that backup and `enableFileDeletion` clears the fresh files. A fail-open webhook never blocks a PVC, and the background scan backfills one missed during an outage. Velero with Kopia or K8up would replace VolSync, a larger change for one node. Kyverno 1.19 is tested upstream only to Kubernetes 1.35 and builds against 1.36, so its gate is admission Ready.
+- Where: `p0b-02`, `p0b-09a`, `p0b-09b`, `p0b-10`, `p2-09`, `p2-20`, `p2-21`; framework R31, §4, §5, §6, §8.
+- Status: Confirmed by Gordon 2026-10-28.

@@ -279,7 +279,7 @@ R30. Hosted apps run in app-<name> namespaces on the env’s cluster with defaul
 
 ### Backup and upgrade
 
-R31. Backups. Prefer stateless services. Every PVC has a VolSync backup entry or is marked backup: none (rebuildable), which only observability volumes (VictoriaMetrics, VictoriaLogs) may use. VolSync (restic) backs up to a dedicated local backup path set per env (on the node’s data disk when it has one; a multi-node env uses one NFS export instead, §9), where k3s also writes etcd snapshot files; retention per env (§7); fallback and setup: §4 and the §8 order. The rebuild path is Git plus VolSync: a fresh node rebuilds from Git and the §8 secrets, then restores data from VolSync; etcd snapshots serve only same-node rollback and get no restore drill. Restore drills: P0b proves a volume restore; P2 proves the Hermes volume restore. On one disk, backups protect only against logical loss (deleted volume, bad upgrade), not disk failure; off-site is deferred. Why: state without a tested backup is lost state; backing up rebuildable metrics and logs would roughly double their disk use. Enforced by: CI checks each PVC has a backup entry or the rebuildable mark; P0b and P2 restore drills.
+R31. Backups. Prefer stateless services. Every PVC is backed up by default: a Kyverno policy generates its VolSync backup when the PVC appears, unless the PVC is marked backup: none (rebuildable), which only observability volumes (VictoriaMetrics, VictoriaLogs) may use. VolSync (restic) backs up through one restic rest-server to a dedicated local backup path set per env (on the node’s data disk when it has one; a multi-node env uses one NFS export instead, §9), where k3s also writes etcd snapshot files; retention per env (§7); fallback and setup: §4 and the §8 order. The rebuild path is Git plus VolSync: a fresh node rebuilds from Git and the §8 secrets, then make restore-all restores each volume from its last backup before the rebuild; etcd snapshots serve only same-node rollback and get no restore drill. Restore drills: P0b proves a volume restore; P2 proves the Hermes volume restore. On one disk, backups protect only against logical loss (deleted volume, bad upgrade), not disk failure; off-site is deferred. Why: state without a tested backup is lost state; opt-out by default means a new app is never silently left out; backing up rebuildable metrics and logs would roughly double their disk use. Enforced by: CI checks the backup policy is present, backup: none appears only on the allow-list and no ReplicationSource is hand-written; P0b and P2 restore drills.
 
 R32 — merged into R31 (backups).
 
@@ -331,7 +331,8 @@ Format: tool — role — swap boundary.
 - cert-manager — internal CA and a wildcard cert for *.<DNS suffix> (env-01: *.alpha.lan) — Certificate resources.
 - CoreDNS with the k8s_gateway plugin (a second CoreDNS, separate from k3s cluster DNS) — App DNS inside the env: serves the env’s DNS-suffix zone (env-01: alpha.lan), answering <svc>.alpha.lan from Ingress routes, exposed on the edge nodes (every env assigns edge to at least one node, D42); assumed setup: the router forwards alpha.lan lookups to it (router config is Gordon-owned, §8) — DNS on port 53.
 - k3s local-path — persistent volumes — storage classes.
-- VolSync (restic) — volume backups to a restic repository on the env’s dedicated local backup path (a Phase 0 test decides; only fallback: one restic CronJob mounting it, OQ7); k3s writes etcd snapshot files to the same path, set by Ansible (same-node rollback only, R31) — restic repository.
+- VolSync (restic) with restic’s rest-server — volume backups, one restic repository per PVC, served by one rest-server on the backup node from the env’s dedicated local backup path (the Phase 0 test chose VolSync over the one-CronJob fallback, OQ7); k3s writes etcd snapshot files to the same path, set by Ansible (same-node rollback only, R31) — restic repository.
+- Kyverno (classic ClusterPolicy only) — backup enrollment: generates each PVC’s VolSync ReplicationSource and restic Secret, and the mover opt-in on its namespace (R31, D47) — Kubernetes policy.
 - SOPS with age, plus one checked-in bootstrap script (make bootstrap-secrets: create-if-missing, never overwrites, so a second run changes nothing, with a test) for the §8 entries marked bootstrap-secrets, and make seal for secrets created in a UI — secrets in Git, one set per env — encrypted files.
 - Default-deny NetworkPolicies (enforced by k3s’s network-policy controller) — isolation for hosted apps — NetworkPolicy.
 
@@ -369,7 +370,7 @@ Format: tool — role — swap boundary.
 - Temporal, Hatchet or a Docker socket for the code-factory.
 - Tailscale, Headscale or any VPN agent on the nodes; access is router-owned (§8).
 - A local S3 server (Example: MinIO, Garage) for backups.
-- A volume snapshot controller: local-path has no volume snapshots; pre-upgrade backups use VolSync (R33), which needs only the VolumeSnapshot CRD.
+- A volume snapshot controller: local-path has no volume snapshots; pre-upgrade backups use VolSync (R33), which needs only the VolumeSnapshot CRD. For the same reason restore is never a VolSync volume populator (a PVC dataSourceRef), which needs snapshots.
 
 ## 5. Interfaces and contracts
 
@@ -382,7 +383,7 @@ Each gets a CONTRACT.md from one template: offers, expects, health, config, prov
 - Env schema (P0) — what an env may set: nodes with their roles and optional data disk (inventory/hosts.yml, D42), the data paths (D3), the Git repos and AI provider host (D45), sizes, enabled features, bots, enabled cron, time zone, bot tier map and tier-to-model map, backup target and retention, DNS suffix (dns_suffix; env-01: alpha.lan), the node SSH user (ssh_user, default ubuntu; Ansible logs in as it and runs every task as root), app hosting on or off and the enabled apps, the code delivery provider (github only), the build agent (cursor only). It validates values/cluster-vars.yaml, values/hermes.yaml, values/apps.yaml and inventory/hosts.yml in CI for every env, including the env-00 example (D43). Its CONTRACT.md sections are listed in D45.
 - Login (P1, P2) — each UI’s built-in login (R27); bootstrap-secrets creates the Grafana admin password and each Hermes dashboard’s password hash and signing secret. Dashboard and Grafana logins work offline (R18). Multi-user seam: a second user adds one OIDC issuer for the UIs’ native OIDC (§9). Proven by: the R27 CI check and the P2 dashboard-login check.
 - Exposure (P0) — a component gets <svc>.${dns_suffix} by adding one Ingress (OQ8). Ports 80/443 and 53 land on the edge nodes; every env gives edge to at least one node, with no fallback to control_plane (D42). App DNS answers the name automatically, the wildcard cert covers it (R28), and the component adds its own Gatus check (R5). Gatus resolves the env’s zone through cluster DNS (k3s coredns-custom forwards it to App DNS) and trusts the internal CA’s public root cert, committed in plain text, so its HTTPS checks see what a browser sees. Proven by: the R5 lint and the P0b, P2 and P4a reachability checks.
-- Backups (P0) — each PVC either uses the shared VolSync component from platform/backups/ (a ReplicationSource with an on-demand trigger, which make hermes-backup uses) or is marked backup: none (rebuildable) (R31). The target path (backup_path; volumes sit under local_path_data, D3), retention and weekly prune come from cluster-vars.yaml. Restore is a ReplicationDestination with a written procedure. The mover runs as root through VolSync’s privileged-movers namespace opt-in, because a hostPath repo ignores fsGroup; revisit at the NFS target (§9). Proven by: the R31 CI check and the P0b and P2 restore drills.
+- Backups (P0) — every PVC is backed up by default (R31): a Kyverno policy in platform/backups/ generates, in the PVC’s namespace, its restic Secret and a VolSync ReplicationSource (Direct copy, nightly, plus an on-demand trigger set through a PVC annotation, which make hermes-backup uses). The only opt-out is the PVC annotation backup: none (rebuildable). No ReplicationSource is written in Git. Each PVC has its own restic repository, <namespace>/<pvc>, on one restic rest-server pinned to the backup node; the target path (backup_path; volumes sit under local_path_data, D3), retention and weekly prune come from cluster-vars.yaml. Running volumes are copied file by file, so a database quiesces or dumps before its backup. Restore is make restore APP=<app>, and make restore-all after a rebuild: suspend the app, scale it to 0, run one Direct ReplicationDestination as of a time before the loss that also removes stray files, then resume. Restore is never automatic (§4 Avoid). The mover runs as root through VolSync’s privileged-movers namespace opt-in, which the policy sets, so it reads any workload’s files; a per-app mover security context is the later fix. Proven by: the R31 CI check and the P0b and P2 restore drills (D47).
 - Alert path (P1) — Gatus checks and Grafana metric and log alerts (disk full, node memory above 80%, node not ready, clock not synchronised, backup failures, bot cron failures) to one Telegram chat through the send-only alerts bot; never through Hermes. The observability network policy follows R13’s egress rule; the hosts it uses are api.telegram.org and, for Gatus’s provider probe, api.x.ai.
 - Code delivery provider (P0) — one contract for six capabilities: repo hosting (the Flux source), CI runs, the issue and label queue, PR open and merge, the approval-label check (admin-gate, R36) and the image registry. Each env picks its provider in envs/<env>/values/cluster-vars.yaml (code_delivery: github, the only accepted value, validated by the env schema; no manifest reads it until a second provider exists); services, code-factory and app hosting depend only on this contract. GitHub provider (the only one built): GitHub repos, GitHub Actions, Issues and labels, PRs (coding agents through the agent account’s token (env-01: gordon5417-ai), code-factory drafts through the code-factory GitHub App), branch protection plus admin-gate, and GHCR (§4). Forgejo is the planned second provider (§9). Proven by: env schema validation and the P0a, P4a and P4b checks.
 - Build agent (P4b) — one capability contract (docs/build-agent/CONTRACT.md) for the coding agent a lane runs; each agent is a thin adapter script the lane calls (lanes/agents/<name>.sh). Each env picks it in envs/<env>/values/cluster-vars.yaml (build_agent: cursor, the only accepted value, validated by the env schema). An adapter runs headless, with an exit code that means provider down (R18) and never a silent fallback to pay-as-you-go; writes one standard result file; uses one subscription-backed secret; loads AGENTS.md; takes its deny list from an admin-gate protected file (R36); runs the checker read-only; never pushes or opens PRs (the publish job does, R42); maps builder, checker and hard to models or marks a role unsupported; and installs a pinned version, called by full path. Cursor adapter (the only one built): the headless Cursor CLI on the Cursor user API key, deny list .cursor/cli.json, checker in ask mode, models per R41. grok-build and opencode-local are §9 stubs. Proven by: env schema validation and the P4b checks.
@@ -397,24 +398,25 @@ Two repos: jarvis (infra, platform, services) and jarvis-apps (apps JARVIS hosts
 ```
 jarvis/
   AGENTS.md                    lean pointer to the rulebooks
-  Makefile                     render | check | verify | hermes-backup | bootstrap-secrets | seal | google-consent (wraps tools/ and ci/)
+  Makefile                     render | check | verify | hermes-backup | restore | restore-all | bootstrap-secrets | seal | google-consent (wraps tools/ and ci/)
   .sops.yaml                   age recipients; one creation rule per env, keyed on envs/<env>/secrets/ (a new env adds its own rule, D45)
   .cursor/cli.json             Cursor CLI permission list for coding agents (deny beats allow)
   renovate.json
   docs/                        README.md (points to project-plans for the framework, plan and decisions; never copies them), CONTRACT.template.md, code-delivery/CONTRACT.md (provider contract; github only), build-agent/CONTRACT.md (agent contract; cursor only)
   rulebooks/coding-agents.md
   schema/                      env schema: the validator for every env and CONTRACT.md (D7)
-  tools/                       operator tools that run against an env: prep-node, render-profiles, bootstrap-secrets, seal, google-consent, hermes-backup, install-deps and versions.env, lib/ (shared helpers), verify/ (one short checklist per phase)
+  tools/                       operator tools that run against an env: prep-node, render-profiles, bootstrap-secrets, seal, google-consent, hermes-backup, restore, install-deps and versions.env, lib/ (shared helpers), verify/ (one short checklist per phase)
   ci/                          build and test that only read the repo: checks/ (one script per CI rule, including product-ci and admin-gate; helpers in checks/lib/), tests/, run-checks, ci-local-verify, rule-checks.txt
   infra/                       layer 1: nodes (Ansible only)
     inventory/roles.yml/       the core constructed inventory, passed as the second -i: the constructed config turns node_roles into groups, and groups.yml keeps an empty data_disk group (D42)
     ansible/                   ansible.cfg, site.yml, roles/{base-os, node-disk, k3s, kubeconfig, flux-operator}/ (values from envs/<env>/values/cluster-vars.yaml)
   platform/                    layer 2: only what Flux reconciles; each folder has CONTRACT.md
-    flux-operator/             operator HelmRelease (Flux-managed after the one-time Ansible apply, R1) and the platform-controllers kustomization.yaml, which lists traefik and backups/controller
+    flux-operator/             operator HelmRelease (Flux-managed after the one-time Ansible apply, R1) and the platform-controllers kustomization.yaml, which lists traefik, kyverno and backups/controller
     traefik/                   HelmChartConfig (applied in kube-system); routes are plain Ingress
     cert-manager/              controller/ + config/ (internal CA, wildcard *.${dns_suffix})
     app-dns/                   CoreDNS + k8s_gateway
-    backups/                   controller/ (VolSync) + config/ (policies)
+    kyverno/                   Kyverno HelmRelease (classic ClusterPolicy only)
+    backups/                   controller/ (VolSync, restic rest-server) + config/ (the Kyverno backup policy)
     app-hosting/               ResourceSet template: ns, quota, netpol, SA, GitRepository, impersonated Kustomization
   services/                    layer 3; each component folder has CONTRACT.md
     observability/             victoria-metrics, victoria-logs, fluent-bit, vmagent, grafana/{dashboards,alerts}, gatus
@@ -486,7 +488,7 @@ Format: item — created by — stored in — used by. SOPS files are envs/<env>
 
 - age keypair — Gordon — private key offline (custody below), public key in .sops.yaml; applied once by the Ansible bootstrap as flux-system/sops-age (R25) — Flux and Ansible (SOPS decryption).
 - Internal CA root (10-year expiry) — bootstrap-secrets — SOPS; root cert trusted per device by Gordon — platform-cert-manager.
-- VolSync restic password and repository, one shared Secret — bootstrap-secrets — SOPS — platform-backups.
+- VolSync restic password and the rest-server login, one shared Secret — bootstrap-secrets — SOPS — platform-backups; the backup policy copies it into each backed-up PVC’s namespace with that PVC’s repository.
 - Other component secrets (Grafana admin, and for each deploy the Hermes API key and the dashboard password hash and signing secret) — bootstrap-secrets — SOPS — their own namespace only.
 - Renovate GitHub App install — Gordon — no stored secret — jarvis and jarvis-apps.
 - Hermes xAI login, ops deploy (xai-oauth device login on Gordon’s subscription) — Gordon approves the device code — the deploy’s volume (VolSync-backed), never Git or CI — hermes-ops only.
@@ -521,7 +523,7 @@ Format: item — created by — stored in — used by. SOPS files are envs/<env>
 5. FluxInstance syncs envs/env-01/flux; Renovate opens PRs; P0a checks (make verify PHASE=p0a).
 6. Traefik with plain Ingress (OQ8). Then cert-manager’s internal CA (wildcard *.alpha.lan), then App DNS serving the alpha.lan zone.
 7. [Gordon] Router forwarding of alpha.lan to App DNS; trust the root cert on each device.
-8. VolSync: first a ~10-minute backup-and-restore test to the backup path, run right after Traefik in step 6, and if it fails, one restic CronJob instead, no further searching (OQ7); then backups with the env’s retention.
+8. VolSync: first a ~10-minute backup-and-restore test to the backup path, run right after Traefik in step 6, and if it fails, one restic CronJob instead, no further searching (OQ7); then the rest-server, then Kyverno and its backup policy, with the env’s retention; the restore commands come with the P0b restore drill.
 9. P0b checks (make verify PHASE=p0b); P0 exit.
 
 Steps 6–8 are the order components are added to the platform layer; Flux dependsOn handles the apply order (R1).
@@ -557,7 +559,7 @@ Not built in this plan. Core builds only the named seam. Format: item — seam n
 - One-command bot retire and orphan-profile flagging — R19’s retire-by-hand steps — more than a handful of bots.
 - More Telegram-facing bots (inbox, homelab, spec-writer) — one token each and the allow-list (R21) — a bot proven in practice.
 - Off-site backups (Example: a B2 bucket) — backup target setting — JARVIS holds data worth keeping.
-- Multi-node backup target: one NFS export every node reaches for the restic repo; live volumes stay local — the backup repo mount — a multi-node env is stood up.
+- Multi-node backup target: the rest-server’s data directory moves to one NFS export every node reaches; clients, repositories and live volumes stay as they are — the rest-server volume — a multi-node env is stood up.
 - Local read-only Git mirror — Flux source — offline rebuilds wanted.
 - LLM tracing (Langfuse, hermes_otel) — Hermes analytics meanwhile — more RAM or a cost puzzle.
 - Postgres (CloudNativePG) — none; Hermes uses SQLite — a component needs it.
@@ -591,7 +593,8 @@ OQ10. Closed 2026-10-19, approved by Gordon: node OS = Ubuntu 26.04 Server, mini
 ### Risks
 
 - Hermes upgrade breakage — R33; the runtime stays swappable.
-- SQLite corruption and a root-starting image — one volume per deploy, pre-upgrade backup, R13 offsets.
+- SQLite corruption and a root-starting image — one volume per deploy, pre-upgrade backup, R13 offsets; backups copy live files, so Hermes quiesces or dumps SQLite first (D47).
+- Kyverno down, or untested on the cluster’s Kubernetes version — failurePolicy Ignore so PVC creates never block, a background scan backfills missed backups, and its install gate is admission Ready (D47).
 - Prompt injection through email or web — read-only tools, R13, R15.
 - Subscription pool use (code-factory shares Gordon’s personal weekly pool; accepted) — Hermes loop hard stops, cheap tiers, Cursor auto top-up off with a monthly limit.
 - xAI returns 403 to some accounts on xai-oauth — documented fix: one xAI API key per deploy; a contingency, not built.
