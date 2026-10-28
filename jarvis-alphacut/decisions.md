@@ -70,8 +70,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D8
 
 - Decision: the R2 check treats a component root as a §6 folder the layout assigns `CONTRACT.md`. Every direct child of `platform/` is a root. Nested directories are not component roots, and a parent that holds only nested roots and no files of its own is skipped until it is built.
-- Reason: the rule requires the file and does not define the folder set. A check on every directory would fail on `skills/` and `tests/`.
-- Where: `tools/checks` (`p0a-08`).
+- Reason: the rule requires the file and does not define the folder set. A check on every directory would fail on `skills/`.
+- Where: `ci/checks` (`p0a-08`).
 - Status: accepted-with-plan default.
 
 ## D9
@@ -132,8 +132,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D17
 
-- Decision: `make verify PHASE=<phase>` runs `tools/verify/<phase>`, a short script outside `tools/checks/` with no tests of its own. It runs on the controller as the agent user, with no age key, and compares live state with the repo (Example: `kubectl wait --for=condition=Ready` on Flux objects; node labels against the inventory, D42). It exits non-zero on any miss, including zero objects found, prints no reminder lines, and does not re-run CI checks. Owner runs (anything that needs the age key: a full `site.yml`, `bootstrap-secrets`), `[G]` checks and evidence links are the owner checklist in the phase’s verify task; Gordon pastes them with the output, and his review is the gate. The agent user keeps node SSH only for narrow runs that need no age key (Example: `site.yml --tags kubeconfig`). The “another ID gets none” check uses a gateway-handler fixture.
-- Reason: §2 requires attached verify output and reserves `[G]` checks and full `site.yml` runs for Gordon. A script that echoes reminders proves nothing. The age key never reaches the agent user (R25, §8). No second Telegram account exists.
+- Decision: `make verify PHASE=<phase>` runs `tools/verify/<phase>`, a short script outside `ci/` with no tests of its own. It runs on the controller as the agent user, with no age key, and compares live state with the repo (Example: `kubectl wait --for=condition=Ready` on Flux objects; node labels against the inventory, D42). It exits non-zero on any miss, including zero objects found, and does not re-run CI checks. It prints no reminder that counts as a pass: after its own checks it lists the owner checklist as blank lines to fill in and, when those checks pass, ends with how many owner items remain. Owner runs (the runs that need the age key: the first `site.yml` on a fresh node and an age-key swap or rotation; not `bootstrap-secrets`, which needs only the `.sops.yaml` public recipient), `[G]` checks and evidence links are the owner checklist in the phase’s verify task; Gordon pastes them with the output, and his review is the gate. The flux-operator role refuses to overwrite a differing `flux-system/sops-age`, so a swap means deleting that secret by hand, re-encrypting the env’s secrets to the new recipient, and running `site.yml` with the new key file. The agent user never holds a real age key and keeps node SSH for runs that need none: any later `site.yml`, full or tagged, once `flux-system/sops-age` exists (Example: `site.yml --tags kubeconfig`). The “another ID gets none” check uses a gateway-handler fixture.
+- Reason: §2 requires attached verify output and reserves `[G]` checks and Gordon-run steps for Gordon. A script that echoes reminders proves nothing. The age key never reaches the agent user (R25, §8), and `site.yml` needs it only while `flux-system/sops-age` is absent. No second Telegram account exists.
 - Where: every phase verify task, `p0a-13`, `p0a-14`.
 - Status: accepted-with-plan default.
 
@@ -251,7 +251,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D34
 
-- Decision: the node SSH user is an env setting, `ssh_user` in `cluster-vars.yaml`, default `ubuntu`. The default lives only in the env schema; Ansible adds no fallback. Gordon installs Ubuntu with his SSH key on that user. `site.yml` sets `ansible_user` from it and runs every task as root with become; k3s is a root systemd service, and nothing installs under that user.
+- Decision: the node SSH user is an env setting, `ssh_user` in `cluster-vars.yaml`, default `ubuntu`. The default lives only in the env schema; Ansible adds no fallback. `tools/prep-node` installs the controller user’s SSH key on that user (the login user or a new one it creates), grants it passwordless sudo and records it as `ssh_user`. `site.yml` sets `ansible_user` from it and runs every task as root with become; k3s is a root systemd service, and nothing installs under that user.
 - Reason: the user is only a login, so the Ubuntu default needs no extra user, and an env that differs changes one value (R3, R4).
 - Where: `p0a-01`, `p0a-05`, `p0a-12`, `p0a-13`.
 - Status: Confirmed by Gordon 2026-10-19.
@@ -279,7 +279,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D38
 
-- Decision: admin-gate’s bot and App actor cases are proven by a fixture event (actor type Bot, and actor type App) run in CI against `tools/checks/admin-gate`, the same script the workflow runs. The live PR proves a label from `gordon5417-ai` fails, and a label Gordon’s own account adds after the latest commit passes.
+- Decision: admin-gate’s bot and App actor cases are proven by a fixture event (actor type Bot, and actor type App) run in CI against `ci/checks/admin-gate`, the same script the workflow runs. The live PR proves a label from `gordon5417-ai` fails, and a label Gordon’s own account adds after the latest commit passes.
 - Reason: the P2 check requires a bot or App actor, and the code-factory App is created at P4 (§8).
 - Where: p2-24. The live App label is repeated at p4b-10.
 - Status: Confirmed by Gordon 2026-10-19.
@@ -307,7 +307,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D42
 
-- Decision: each node declares its roles (`node_roles`) and optional data disk in its own block in `envs/<env>/inventory/hosts.yml`. One constructed inventory config in core, `infra/inventory/roles.yml`, passed as a second `-i` after the env inventory, turns the roles into Ansible groups. No env copies it. There are no host_vars and no separate nodes file.
+- Decision: each node declares its roles (`node_roles`) and optional data disk in its own block in `envs/<env>/inventory/hosts.yml`. One constructed inventory in core, the folder `infra/inventory/roles.yml` (the constructed config plus `groups.yml`), passed as a second `-i` after the env inventory, turns the roles into Ansible groups. No env copies it. There are no host_vars and no separate nodes file.
 
   ```yaml
   # envs/<env>/inventory/hosts.yml
@@ -317,7 +317,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
         node_roles: [control_plane, workers, storage, backup]   # known: control_plane, workers, storage, backup, gpu, edge
         data_disk: {id: /dev/disk/by-id/<stable id>, wipe_confirmed: true}   # optional; a whole disk, never /dev/nvmeXnY or -partN
 
-  # infra/inventory/roles.yml (core; one copy for every env)
+  # infra/inventory/roles.yml/constructed.yml (core; one copy for every env)
   plugin: ansible.builtin.constructed
   strict: true
   keyed_groups:
@@ -329,9 +329,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
     data_disk: data_disk is defined
   ```
 
-  - Groups: the empty prefix and separator, with `leading_separator: false`, name each group after its role (never `_<role>`), so `--limit storage` and `hosts: storage` work. `data_disk` is a constructed group of the hosts that declare one; it is not a role and gets no label.
+  - Groups: the empty prefix and separator, with `leading_separator: false`, name each group after its role (never `_<role>`), so `--limit storage` and `hosts: storage` work. `data_disk` is a constructed group of the hosts that declare one; it is not a role and gets no label. `groups.yml` keeps it as an empty group when no host declares one, so its play matches nothing without a warning.
   - Schema: `node_roles` (not Ansible’s reserved `roles`) from the known set; exactly one `control_plane` host and one `backup` host, and at least one `edge` host; `data_disk` exactly `{id, wipe_confirmed}`; no other host keys (no IPs, R25).
-  - Secrets: inventory and group_vars never need the age key. Secrets live only in SOPS files that bootstrap-secrets and Flux decrypt, never loaded through the community.sops vars plugin, so narrow runs work without the key (D17).
+  - Secrets: inventory and group_vars never need the age key. Secrets live only in SOPS files that bootstrap-secrets writes and Flux decrypts, never loaded through the community.sops vars plugin, so later `site.yml` runs work without the key (D17).
   - Plays: base-os on `all`, node-disk on `data_disk`, the k3s server on `control_plane`, the k3s agent on `all:!control_plane`, then kubeconfig and flux-operator on `control_plane`; `node-name` comes from `inventory_hostname`.
   - Join: every host that is not `control_plane` joins as a k3s agent; `workers`, `storage`, `backup`, `gpu` and `edge` are scheduling labels only, and the `control_plane` host runs the server only. An agent’s config sets `server: https://<control_plane inventory_hostname>:6443`, its own `node-name` and the token, with no `cluster-init` or `node-label`. The token is the server’s node-token, read by a `slurp` delegated to `control_plane` under `no_log`, so `--limit` runs still work; it is never in Git, the inventory, cluster-vars or SOPS (D17, R25).
   - Labels: `role.<dns_suffix>/<role>=true` for each role; the prefix is reserved for them. A task on `control_plane` sets them with kubernetes.core on every run and removes prefixed labels for dropped roles. No k3s `node-label`, which applies only at registration.
@@ -360,8 +360,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D44
 
 - Decision: no environment-identity value appears in core, and each has one source.
-  - Sources: `tools/checks/core-names` reads them from every `envs/<env>` except env-00, a fixture excluded from every source: env names (the folder names), inventory hostnames, `ssh_user`, `dns_suffix`, and the owner handle in `flux_git_repo_url` and `apps_git_repo_url`. A new env is covered automatically. The owner’s personal name never lives in the repo; it comes from a GitHub Actions repo variable, not a secret (an env var of the same name locally), it matches only as the full name, and the check fails when it is unset in CI. The agent account is not repo config, so the repo never names it.
-  - Scan: `infra/`, `platform/`, `services/`, `tools/`, `docs/`, `.github/` except `CODEOWNERS`, every README and `rulebooks/`. Env names are allowed in `envs/**` and `docs/**`, the other values in `envs/<env>/`, and the personal name nowhere. Root files are not scanned, so the per-env `.sops.yaml` rules (D45) need no exemption.
+  - Sources: `ci/checks/core-names` reads them from every `envs/<env>` except env-00, a fixture excluded from every source: env names (the folder names), inventory hostnames, `ssh_user`, `dns_suffix`, and the owner handle in `flux_git_repo_url` and `apps_git_repo_url`. A new env is covered automatically. The owner’s personal name never lives in the repo; it comes from a GitHub Actions repo variable, not a secret (an env var of the same name locally), it matches only as the full name, and the check fails when it is unset in CI. The agent account is not repo config, so the repo never names it.
+  - Scan: `infra/`, `platform/`, `services/`, `tools/`, `ci/`, `docs/`, `.github/` except `CODEOWNERS`, every README and `rulebooks/`. Env names are allowed in `envs/**` and `docs/**`, the other values in `envs/<env>/`, and the personal name nowhere. Root files are not scanned, so the per-env `.sops.yaml` rules (D45) need no exemption.
   - Match: case-insensitive whole words, so a handle inside a URL is caught and a longer word is not. Bare repo names are not identity values; a repo URL outside `envs/<env>/` fails on its owner handle. `ssh_user` matches only as `/home/<user>`, `<user>@<host>` or `~<user>`, so `ubuntu:26.04` passes. The check holds no values and no word lists.
   - Product rules in the same check: the word `bastion` and any hardcoded `/home/` path are banned.
   - Workflows name their own repo with `${{ github.repository }}` or local `./.github/` refs. admin-gate and the code-factory label-actor check trust the repository owner from the event (`github.repository_owner`) and check out no PR code.
@@ -377,7 +377,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - `llm_provider_host`: the AI provider’s API host, read by Hermes and the Gatus provider probe; the p2-18 drill overrides it.
   - Flux variables are the lowercase cluster-vars keys (`${dns_suffix}`), and lists are JSON strings. The FluxInstance turns on kustomize-controller’s `StrictPostBuildSubstitutions`, so a missing variable fails instead of going empty. A literal `${...}` that is not a cluster var (shell in ConfigMaps, dashboards, Gatus templates) is written `$${...}`.
   - `.sops.yaml` has one age creation rule per env, keyed on `envs/<env>/secrets/`.
-  - Tools that act on one env (bootstrap-secrets, seal, the cluster-vars render) require `ENV=` or `--env` and fail without it. The stale-render check skips envs with no `flux/`.
+  - `age_key_file`: optional, the age private key path on the controller, default `~/.config/sops/age/keys.txt` under the running user’s HOME, never in the repo; `SOPS_AGE_KEY_FILE` overrides it. Each env uses its own key file, and `prep-node`, `bootstrap-secrets` and `site.yml` use the same one. `prep-node` warns when an existing key does not match the env’s `.sops.yaml` recipient.
+  - Tools that act on one env (bootstrap-secrets, seal, the cluster-vars render) require `ENV=` or `--env` and fail without it. The stale-render test in `ci/tests/test_flux_entry.py` skips envs with no `flux/`. `tools/prep-node` re-renders `envs/<env>/flux/generated/cluster-vars-configmap.yaml` after it edits cluster-vars.
   - The env schema CONTRACT.md has sections for node roles and labels (D42), identity values and product rules (D44), env-00 as the every-key reference, where a new key is set in env-00 in the same PR (D43), and cluster-vars to postBuild (this entry).
 - Reason: one source per value, loud failures instead of empty ones, and no tool that guesses the env.
 - Where: `p0a-03`, `p0a-04`, `p0a-05`, `p0a-05a`, `p0a-11a`, `p0a-14`, `p2-18`, `p4a-02`, `p4b-09a`, `p4b-09b`; framework R4, §5 and §6.
