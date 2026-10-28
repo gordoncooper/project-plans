@@ -343,7 +343,7 @@ Proven by:   The R31 CI check (added with the first PVC, p0b-09) and the P0b and
 
 ```text
 ID:          p0b-03
-Goal:        Install Traefik’s HelmChartConfig for plain Ingress and the default TLSStore.
+Goal:        Install Traefik’s HelmChartConfig for plain Ingress, limiting the default TLSStore to the cert-manager namespace.
 Why:         P0b reachability is HTTPS through Traefik Ingress (OQ8, R28).
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-01
@@ -359,8 +359,8 @@ Why:         The test app’s cert has to come from the internal CA, and rebuild
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-03
 Touches:     platform/cert-manager/controller, platform/cert-manager/config
-Hard limits: R5; R25; R28. The root key is the SOPS secret from bootstrap-secrets. The public root is plain text for Gatus and for devices. The CA lifetime is 10 years. Gordon keeps the calendar reminder (§8 custody). D30.
-Done checks: A Certificate for *.alpha.lan is Ready and the cert chains to the committed root. One PR.
+Hard limits: R5; R25; R28. The root key is a SOPS secret from make bootstrap-secrets, run on the controller by Gordon or the agent user (D17): the script generates the key and encrypts it to the .sops.yaml recipient in one step, so the plaintext key is never written to disk or logs. The public root is plain text for Gatus and for devices. The CA lifetime is 10 years. Gordon keeps the calendar reminder (§8 custody). D30.
+Done checks: A Certificate for *.alpha.lan is Ready and the cert chains to the committed root. The default TLSStore sits next to that Certificate in the cert-manager namespace, so kube-system keeps only the HelmChartConfig. One PR.
 ```
 
 ```text
@@ -382,7 +382,7 @@ Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suff
 Depends on:  p0b-03, p0b-05
 Touches:     ci/checks/manifest-lint, ci/checks/loadbalancer
 Hard limits: R5 (memory request and limit, CPU request, no CPU limit, probes, stdout logs, Gatus when the endpoint exists). R28.
-Done checks: A seeded manifest missing a memory limit fails. A seeded LoadBalancer besides Traefik and App DNS fails. Current platform manifests pass. One PR.
+Done checks: A seeded manifest missing a memory limit fails. A seeded LoadBalancer besides Traefik and App DNS fails. Current platform manifests pass. One PR, shared with p0b-07 (same area).
 ```
 
 ```text
@@ -392,8 +392,8 @@ Why:         Images are pinned by digest so Renovate is the upgrade path (R33).
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-06
 Touches:     ci/checks/digest-pin
-Hard limits: R33. The k3s host binary stays a cluster-vars pin (D5), not an image digest.
-Done checks: A seeded image: tag with no digest fails ci. Traefik, cert-manager, and CoreDNS manifests are digest-pinned. One PR.
+Hard limits: R33. The k3s host binary stays a cluster-vars pin (D5), not an image digest. Images k3s bundles (Traefik, cluster CoreDNS) are pinned by k3s_version and are out of scope; the check covers images the repo adds.
+Done checks: A seeded image: tag with no digest fails ci. cert-manager and App DNS images are digest-pinned. Ships in the p0b-06 PR.
 ```
 
 ```text
@@ -414,7 +414,7 @@ Why:         OQ7 is a Phase 0 test with one fallback and no further searching (R
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0b-02, p0a-14
 Touches:     ci/checks/pvc-backup, platform/backups/controller, platform/backups/config
-Hard limits: R9; R31. No local S3 server. No volume snapshot controller. D3; D15; D30. VolSync schedules take TZ from cluster-vars. The ~10-minute test writes the choice into the backup CONTRACT.md config section. The R31 check is small: every PVC and StatefulSet volumeClaimTemplate has a ReplicationSource or the p0b-02 backup: none annotation inside the allow-list.
+Hard limits: R9; R31. No local S3 server. No volume snapshot controller. D3; D15; D30. VolSync schedules take TZ from cluster-vars. The ~10-minute test runs early, right after p0b-03, as its own small PR, and writes the choice into the backup CONTRACT.md config section; the R31 check, retention and prune follow in a second PR. The R31 check is small: every PVC and StatefulSet volumeClaimTemplate has a ReplicationSource or the p0b-02 backup: none annotation inside the allow-list.
 Done checks: A seeded PR with a PVC that has neither a backup entry nor backup: none fails ci. The log shows the VolSync test result and either a working VolSync ReplicationSource or the one CronJob, writing to backup_path. Retention in cluster-vars is 7 daily / 4 weekly / 3 monthly (§7). One PR.
 ```
 
@@ -426,7 +426,7 @@ Advances:    P0b exit check: “Restore drill: a deleted volume is restored by V
 Depends on:  p0b-09, p0a-12
 Touches:     platform/backups/ (drill volume)
 Hard limits: R31. The etcd snapshot is not restored in this drill. The drill runs by hand with kubectl reads; no drill helper. The volume drill uses the mechanism p0b-09 kept.
-Done checks: The log shows the original checksum, the delete, the restore, and the matching checksum, plus an etcd snapshot filename on the backup path. One PR.
+Done checks: The log shows the original checksum, the delete, the restore, and the matching checksum, plus an etcd snapshot filename on the backup path. The drill volume is removed afterward. Ships in the p0b-11 PR.
 ```
 
 ```text
@@ -437,8 +437,8 @@ Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suff
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0b-08, p0b-10, p0b-07
 Touches:     Makefile, tools/verify/p0b
-Hard limits: R28; R35. D17. Router forwarding of alpha.lan and the trusted root cert are Gordon’s steps on p0b-08. Nothing for Tailscale is installed on the node.
-Done checks: make verify PHASE=p0b exits 0 with the LAN curl, the cert issuer and the restore checksum. Owner checklist: Gordon’s tailnet [G] paste. One PR.
+Hard limits: R28; R35. D17. Router forwarding of alpha.lan and the trusted root cert are Gordon’s steps on p0b-08. Nothing for Tailscale is installed on the node. verify reads the p0b-10 drill log for the restore checksum; it does not re-run the drill.
+Done checks: make verify PHASE=p0b exits 0 with the LAN curl, the cert issuer and the recorded restore checksum. Owner checklist: Gordon’s tailnet [G] paste. One PR.
 ```
 
 ### Exit checks
