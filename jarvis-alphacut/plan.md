@@ -246,7 +246,7 @@ Why:         Git has to drive a blank node, with platform before configs before 
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Advances:    P0a exit check: “A SOPS-encrypted secret decrypts in-cluster.”
 Depends on:  p0a-13, p0a-02, p0a-08
-Touches:     envs/env-01/flux/, platform/flux-operator/, platform/backups/ namespace only, tools/lib/render_cluster_vars_configmap.py, ci/checks/render-diff
+Touches:     envs/env-01/flux/, platform/flux-operator/, platform/backups/ namespace only, tools/lib/render_cluster_vars_configmap.py, the stale-render test in ci/tests/test_flux_entry.py
 Hard limits: R1; R4; R25; R34. D9; D10; D11; D45 (lowercase variables, JSON lists, strict substitution, $${...} escapes, explicit env). Resources that use their own ${…} syntax set substitute: disabled. One script renders the cluster-vars ConfigMap from values/cluster-vars.yaml; tools/prep-node re-runs it after editing cluster-vars. This PR adds the cluster-vars to postBuild section to the env schema CONTRACT.md.
 Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. Gordon’s first site.yml on the fresh node (an owner run, D17), after tools/prep-node and make bootstrap-secrets, passes the D42 asserts; runs no node-disk, since env-01 has no data_disk and keeps its data on root (D42); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. A second site.yml and a second bootstrap-secrets, run by Gordon or the agent user (D17), change nothing. One PR.
 ```
@@ -677,12 +677,12 @@ Done checks: A unit test shows a runtime edit is replaced by the Git copy. One P
 
 ```text
 ID:          p2-07
-Goal:        Add the hermes.yaml render script, extend the render diff check to it, and seed a stale render.
+Goal:        Add the hermes.yaml render script, extend the stale-render test in ci/tests/test_flux_entry.py to it, and seed a stale render.
 Why:         One checked-in script renders profiles, and a hand-edited rendered/ must fail (R4).
 Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Advances:    P0a exit check: “One required check on main, ci, runs every ci/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class).”
 Depends on:  p2-06b, p0a-05
-Touches:     tools/render-profiles, envs/env-01/rendered/, ci/checks/render-diff (adds the Hermes render)
+Touches:     tools/render-profiles, envs/env-01/rendered/, the stale-render test in ci/tests/test_flux_entry.py (adds the Hermes render)
 Hard limits: R4. rendered/ is generated and never hand-edited. The stale-render seed lands with this render.
 Done checks: A fresh render matches rendered/. A seeded PR that edits rendered/ without rerendering fails ci. One PR.
 ```

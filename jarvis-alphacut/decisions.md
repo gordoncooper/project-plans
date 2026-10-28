@@ -70,7 +70,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D8
 
 - Decision: the R2 check treats a component root as a §6 folder the layout assigns `CONTRACT.md`. Every direct child of `platform/` is a root. Nested directories are not component roots, and a parent that holds only nested roots and no files of its own is skipped until it is built.
-- Reason: the rule requires the file and does not define the folder set. A check on every directory would fail on `skills/` and `tests/`.
+- Reason: the rule requires the file and does not define the folder set. A check on every directory would fail on `skills/`.
 - Where: `ci/checks` (`p0a-08`).
 - Status: accepted-with-plan default.
 
@@ -378,7 +378,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Flux variables are the lowercase cluster-vars keys (`${dns_suffix}`), and lists are JSON strings. The FluxInstance turns on kustomize-controller’s `StrictPostBuildSubstitutions`, so a missing variable fails instead of going empty. A literal `${...}` that is not a cluster var (shell in ConfigMaps, dashboards, Gatus templates) is written `$${...}`.
   - `.sops.yaml` has one age creation rule per env, keyed on `envs/<env>/secrets/`.
   - `age_key_file`: optional, the age private key path on the controller, default `~/.config/sops/age/keys.txt` under the running user’s HOME, never in the repo; `SOPS_AGE_KEY_FILE` overrides it. Each env uses its own key file, and `prep-node`, `bootstrap-secrets` and `site.yml` use the same one. `prep-node` warns when an existing key does not match the env’s `.sops.yaml` recipient.
-  - Tools that act on one env (bootstrap-secrets, seal, the cluster-vars render) require `ENV=` or `--env` and fail without it. The stale-render check skips envs with no `flux/`. `tools/prep-node` re-renders `envs/<env>/flux/generated/cluster-vars-configmap.yaml` after it edits cluster-vars.
+  - Tools that act on one env (bootstrap-secrets, seal, the cluster-vars render) require `ENV=` or `--env` and fail without it. The stale-render test in `ci/tests/test_flux_entry.py` skips envs with no `flux/`. `tools/prep-node` re-renders `envs/<env>/flux/generated/cluster-vars-configmap.yaml` after it edits cluster-vars.
   - The env schema CONTRACT.md has sections for node roles and labels (D42), identity values and product rules (D44), env-00 as the every-key reference, where a new key is set in env-00 in the same PR (D43), and cluster-vars to postBuild (this entry).
 - Reason: one source per value, loud failures instead of empty ones, and no tool that guesses the env.
 - Where: `p0a-03`, `p0a-04`, `p0a-05`, `p0a-05a`, `p0a-11a`, `p0a-14`, `p2-18`, `p4a-02`, `p4b-09a`, `p4b-09b`; framework R4, §5 and §6.

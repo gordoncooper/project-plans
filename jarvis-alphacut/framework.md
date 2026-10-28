@@ -211,7 +211,7 @@ Numbered, each stated once. Format: rule. Why. Enforced by. A merged rule keeps 
 
 R1. Four layers, one folder each: infra (nodes, OS, k3s with its server flags, etcd snapshots and host folders, and the one-time Flux Operator and FluxInstance apply; Ansible only) → platform (only what Flux reconciles: the Flux Operator itself after bootstrap, routing, certs, local DNS, backups, app hosting) → services (Hermes, observability) → apps (hosted apps, in jarvis-apps). Each layer uses only the contracts of the layer below. Each env’s Flux entry point, envs/<env>/flux/, applies them in order: platform controllers → platform configs → services → apps, chained with dependsOn, so no config lands before its CRDs. Why: swap a part without touching the rest; no first-boot races. Enforced by: review against CONTRACT.md; Flux dependsOn.
 
-R2. One home per component: code, config schema, CONTRACT.md and tests in one folder, in the repo it belongs to. Why: nothing to hunt for. Enforced by: CI checks each component folder has a CONTRACT.md.
+R2. One home per component: code, config schema and CONTRACT.md in one folder, in the repo it belongs to; tests live in ci/tests/, and the CONTRACT.md Proven by section names them. Why: nothing to hunt for. Enforced by: CI checks each component folder has a CONTRACT.md.
 
 R3. Core is env-agnostic. Env specifics (nodes, role labels, sizes, enabled features, bots, cron, model map, backup target, DNS suffix, code delivery provider, build agent) live only under envs/<env>; roles map to nodes by labels, so moving a role or adding a node touches only envs/. Why: one core, many envs. Enforced by: CI fails if core names an env, an identity value such as the DNS suffix (D44), or, from P2, a model.
 
@@ -403,20 +403,20 @@ jarvis/
   renovate.json
   docs/                        README.md (points to project-plans for the framework, plan and decisions; never copies them), CONTRACT.template.md, code-delivery/CONTRACT.md (provider contract; github only), build-agent/CONTRACT.md (agent contract; cursor only)
   rulebooks/coding-agents.md
-  schema/                      env schema: the validator for every env, its tests and CONTRACT.md (D7)
+  schema/                      env schema: the validator for every env and CONTRACT.md (D7)
   tools/                       operator tools that run against an env: prep-node, render-profiles, bootstrap-secrets, seal, google-consent, hermes-backup, install-deps and versions.env, lib/ (shared helpers), verify/ (one short checklist per phase)
   ci/                          build and test that only read the repo: checks/ (one script per CI rule, including product-ci and admin-gate; helpers in checks/lib/), tests/, run-checks, ci-local-verify, rule-checks.txt
   infra/                       layer 1: nodes (Ansible only)
     inventory/roles.yml/       the core constructed inventory, passed as the second -i: the constructed config turns node_roles into groups, and groups.yml keeps an empty data_disk group (D42)
     ansible/                   ansible.cfg, site.yml, roles/{base-os, node-disk, k3s, kubeconfig, flux-operator}/ (values from envs/<env>/values/cluster-vars.yaml)
-  platform/                    layer 2: only what Flux reconciles; each folder has CONTRACT.md + tests/
+  platform/                    layer 2: only what Flux reconciles; each folder has CONTRACT.md
     flux-operator/             operator HelmRelease (Flux-managed after the one-time Ansible apply, R1)
     traefik/                   HelmChartConfig (applied in kube-system); routes are plain Ingress
     cert-manager/              controller/ + config/ (internal CA, wildcard *.${dns_suffix})
     lan-dns/                   CoreDNS + k8s_gateway
     backups/                   controller/ (VolSync) + config/ (policies)
     app-hosting/               ResourceSet template: ns, quota, netpol, SA, GitRepository, impersonated Kustomization
-  services/                    layer 3; each component folder has CONTRACT.md + tests/
+  services/                    layer 3; each component folder has CONTRACT.md
     observability/             victoria-metrics, victoria-logs, fluent-bit, vmagent, grafana/{dashboards,alerts}, gatus
     hermes/
       core/                    base/ (Kustomize), config/ (defaults, write_approval, toolset policy),
