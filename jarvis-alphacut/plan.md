@@ -28,7 +28,7 @@ One list, from §8. Each action names the task that waits on it.
 - P0: run the first site.yml from the controller (an owner run, D17). Task: p0a-14.
 - P0: rotate the env-01 bench age key, a one-off exception to D17 held by the agent user on Oct 28, before anything real. Task: p0a-14.
 - P0: for each node that has a data disk, record its by-id path as the node’s data_disk in inventory/hosts.yml, and give the run-time wipe confirmation (D42). env-01 has none. Task: p0a-11b.
-- P0: once JARVIS DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
+- P0: once App DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
 - P0: trust the root cert on each device. Task: p0b-08.
 - P1: create the send-only alerts bot with BotFather. Task: p1-09.
 - P1: send it /start once and record his chat ID. Task: p1-09.
@@ -322,7 +322,7 @@ Why:         A hostname is one Ingress, and the contract is written before Traef
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0a-18
 Touches:     platform/traefik/CONTRACT.md
-Hard limits: R5; R28. D7. The contract states JARVIS DNS answers the name, the wildcard covers it, and the component adds its own Gatus check. Gatus trusts the public root and resolves the zone through cluster DNS.
+Hard limits: R5; R28. D7. The contract states App DNS answers the name, the wildcard covers it, and the component adds its own Gatus check. Gatus trusts the public root and resolves the zone through cluster DNS.
 Done checks: CONTRACT.md has offers, expects, health, config, and proven by. One PR.
 Proven by:   The R5 manifest lint and the P0b, P2, and P4a reachability checks (§5).
 ```
@@ -365,13 +365,13 @@ Done checks: A Certificate for *.alpha.lan is Ready and the cert chains to the c
 
 ```text
 ID:          p0b-05
-Goal:        Install JARVIS DNS (CoreDNS with k8s_gateway) and the coredns-custom forward.
+Goal:        Install App DNS (CoreDNS with k8s_gateway) and the coredns-custom forward.
 Why:         Names under alpha.lan have to resolve from the cluster and, once Gordon forwards the zone, from the LAN (R28, §4).
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-04
-Touches:     platform/lan-dns/, kube-system coredns-custom
+Touches:     platform/app-dns/, kube-system coredns-custom
 Hard limits: R5; R28. D30; D42 (port 53 on the edge set). This CoreDNS is separate from k3s cluster DNS. LoadBalancer Services are only Traefik and this DNS (the lint is p0b-06). No VPN agent on the node.
-Done checks: From a pod, testapp is not required yet; a fixture Ingress name returns an edge node address from JARVIS DNS. One PR.
+Done checks: From a pod, testapp is not required yet; a fixture Ingress name returns an edge node address from App DNS. One PR.
 ```
 
 ```text
@@ -382,7 +382,7 @@ Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suff
 Depends on:  p0b-03, p0b-05
 Touches:     ci/checks/manifest-lint, ci/checks/loadbalancer
 Hard limits: R5 (memory request and limit, CPU request, no CPU limit, probes, stdout logs, Gatus when the endpoint exists). R28.
-Done checks: A seeded manifest missing a memory limit fails. A seeded LoadBalancer besides Traefik and JARVIS DNS fails. Current platform manifests pass. One PR.
+Done checks: A seeded manifest missing a memory limit fails. A seeded LoadBalancer besides Traefik and App DNS fails. Current platform manifests pass. One PR.
 ```
 
 ```text
@@ -532,7 +532,7 @@ Why:         The status page is the NOC surface that loads without a login on th
 Advances:    P1 exit check: “Gatus checks every exposed endpoint; its status page (env-01: gatus.alpha.lan) loads without login on LAN and on tailnet [G].”
 Depends on:  p1-07, p0b-08
 Touches:     services/observability/gatus/
-Hard limits: R5; R8; R27; R28. D12; D13; D30. Gatus resolves alpha.lan through the coredns-custom forward and trusts the committed public root (§5). Checks include testapp, grafana, and gatus, plus TCP/53 for JARVIS DNS.
+Hard limits: R5; R8; R27; R28. D12; D13; D30. Gatus resolves alpha.lan through the coredns-custom forward and trusts the committed public root (§5). Checks include testapp, grafana, and gatus, plus TCP/53 for App DNS.
 Done checks: https://gatus.alpha.lan loads with no login from the LAN and lists those checks. The tailnet load is an owner checklist item (D17). One PR.
 ```
 
