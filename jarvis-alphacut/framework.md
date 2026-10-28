@@ -369,7 +369,7 @@ Format: tool — role — swap boundary.
 - Temporal, Hatchet or a Docker socket for the code-factory.
 - Tailscale, Headscale or any VPN agent on the nodes; access is router-owned (§8).
 - A local S3 server (Example: MinIO, Garage) for backups.
-- A volume snapshot controller: local-path has no volume snapshots; pre-upgrade backups use VolSync (R33). VolSync gets only the VolumeSnapshot CRD it needs to start.
+- A volume snapshot controller: local-path has no volume snapshots; pre-upgrade backups use VolSync (R33), which needs only the VolumeSnapshot CRD.
 
 ## 5. Interfaces and contracts
 
@@ -458,8 +458,7 @@ jarvis-apps/
   - Single disk: EFI 1 GB (vfat, /boot/efi), /boot 2 GB (ext4), and the rest as LVM vg-os with lv-root 60 GB (ext4, /: OS, k3s and images) and lv-data (ext4, label jarvis-data, /var/lib/jarvis), leaving about 10% of vg-os free for growth.
   - With a data disk: the OS disk uses the same EFI, /boot and vg-os layout, and lv-root may grow into the rest. The data disk is the whole disk that node-disk formats and mounts at /var/lib/jarvis by LABEL=jarvis-data (D42).
   - Both: local_path_data and backup_path stay under /var/lib/jarvis (D3), and no swap. Data on its own filesystem means full volumes or backups never fill /.
-  - Install: two shared Ubuntu Server autoinstall profiles, never one per node. Wipe takes the whole OS disk with the single-disk layout. Dual-boot keeps Windows (its EFI partition reused unformatted, MSR, NTFS and Recovery kept), deletes only the Linux partitions on the disk holding that EFI partition, installs into the freed gap (use_gap), then sets lv-root 60 GB and lv-data, so root and data share the gap and EFI keeps Windows’ size.
-  - Disk choice: both profiles pick the OS disk by a rule that refuses when it matches more than one disk, never by /dev/nvmeXnY (NVMe names swap across boots), and never touch a second disk, which node-disk provisions later (D42). Turn off Windows Fast Startup before reinstalling a dual-boot node.
+  - Install: two shared Ubuntu Server autoinstall profiles, never one per node: wipe takes the whole OS disk; dual-boot keeps Windows and its EFI partition and installs into the space freed by removing only the old Linux partitions. Both pick the OS disk by a rule that refuses more than one match, never by device name, and never touch a second disk (D42).
 
 ### Naming
 
@@ -487,7 +486,7 @@ Format: item — created by — stored in — used by. SOPS files are envs/<env>
 
 - age keypair — Gordon — private key offline (custody below), public key in .sops.yaml; applied once by the Ansible bootstrap as flux-system/sops-age (R25) — Flux and Ansible (SOPS decryption).
 - Internal CA root (10-year expiry) — bootstrap-secrets — SOPS; root cert trusted per device by Gordon — platform-cert-manager.
-- VolSync restic password, plus the constant RESTIC_REPOSITORY=/mnt/repo, in one shared Secret backups-restic — bootstrap-secrets — SOPS — platform-backups.
+- VolSync restic password and repository, one shared Secret — bootstrap-secrets — SOPS — platform-backups.
 - Other component secrets (Grafana admin, and for each deploy the Hermes API key and the dashboard password hash and signing secret) — bootstrap-secrets — SOPS — their own namespace only.
 - Renovate GitHub App install — Gordon — no stored secret — jarvis and jarvis-apps.
 - Hermes xAI login, ops deploy (xai-oauth device login on Gordon’s subscription) — Gordon approves the device code — the deploy’s volume (VolSync-backed), never Git or CI — hermes-ops only.
@@ -558,7 +557,7 @@ Not built in this plan. Core builds only the named seam. Format: item — seam n
 - One-command bot retire and orphan-profile flagging — R19’s retire-by-hand steps — more than a handful of bots.
 - More Telegram-facing bots (inbox, homelab, spec-writer) — one token each and the allow-list (R21) — a bot proven in practice.
 - Off-site backups (Example: a B2 bucket) — backup target setting — JARVIS holds data worth keeping.
-- Multi-node backup target: the restic repository on one NFS export (a data node or NAS) that every node reaches, so movers need no node pinning; live volumes stay on local-path under /var/lib/jarvis — the repo mount in the backup component (VolSync moverVolumes takes NFS) — a 3-node env is stood up.
+- Multi-node backup target: one NFS export every node reaches for the restic repo; live volumes stay local — the backup repo mount — a multi-node env is stood up.
 - Local read-only Git mirror — Flux source — offline rebuilds wanted.
 - LLM tracing (Langfuse, hermes_otel) — Hermes analytics meanwhile — more RAM or a cost puzzle.
 - Postgres (CloudNativePG) — none; Hermes uses SQLite — a component needs it.
@@ -581,7 +580,7 @@ OQ5. Closed 2026-10-19, approved by Gordon: start minimal; concierge is the only
 
 OQ6. Closed 2026-10-19, approved by Gordon: hosted Renovate app; a send-only Telegram alerts bot; Grafana-managed metric alerts; evals after deploy (R38); internal CA root key kept SOPS-encrypted; spec-writer files issues without code-factory:ready; Hermes soak and Renovate auto-merge (R33); retention (§7); the bot tier map (R23). Remote access is router-owned (R28).
 
-OQ7. Closed 2026-10-19 as a Phase 0 check (resolved by the test; the fallback is the default): Phase 0’s first backup step is a ~10-minute VolSync backup-and-restore test to the local backup path; if it fails, use the single restic CronJob fallback, no further searching (R31). No local S3 server. (result 2026-10-28: VolSync passed on env-01, so the CronJob fallback is not built)
+OQ7. Closed 2026-10-19 as a Phase 0 check (resolved by the test; the fallback is the default): Phase 0’s first backup step is a ~10-minute VolSync backup-and-restore test to the local backup path; if it fails, use the single restic CronJob fallback, no further searching (R31). No local S3 server. (result 2026-10-28: VolSync passed; no CronJob fallback)
 
 OQ8. Closed 2026-10-19, approved by Gordon: plain Kubernetes Ingress on k3s-bundled Traefik; no Gateway API (§4).
 
@@ -611,7 +610,7 @@ OQ10. Closed 2026-10-19, approved by Gordon: node OS = Ubuntu 26.04 Server, mini
 - A registry outage or rate limit during a rebuild delays it — accepted; retry.
 - Sandbox spend (Cursor pool and Claude usage, Actions minutes) — job time limits; Cursor auto top-up off with a monthly limit.
 - code-factory:hard (Claude through Cursor) may bill at API price outside the subscription pool, depending on Gordon’s Cursor plan — check the plan before P4b; offset: Cursor’s monthly limit with auto top-up off.
-- Flux healthCheckExprs CEL is not compiled in CI (a bare has(status) broke env-01 live) — accepted; a cel-go check is out of proportion for a few expressions; the live run catches it.
+- Flux health-check expressions are not compiled in CI — accepted; the live run catches a bad one.
 - Unrestricted runner egress — accepted limit: GitHub-hosted runners cannot restrict egress; offsets in R42, egress allow-listing arrives with in-cluster gVisor (§9).
 - Vendor shifts — swap boundaries; plain open-source licenses.
 
