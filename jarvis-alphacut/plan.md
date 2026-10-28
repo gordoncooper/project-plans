@@ -22,11 +22,10 @@ One list, from §8. Each action names the task that waits on it.
 - P0: set up the bastion’s agent user with a Cursor login and the gordon5417-ai token, which Gordon creates signed in as gordon5417-ai and pastes onto the bastion. Task: p0a-03.
 - P0: generate the age key (public key in .sops.yaml, private key offline). Task: p0a-03.
 - P0: install Renovate. Task: p0a-15.
-- P0: run make bootstrap-secrets on the bastion and commit its output. Task: p0a-04.
 - P0: wipe the env-01 node (a separate spare compute node; never a node of the previous system). Task: p0a-11b.
 - P0: fresh-install Ubuntu 26.04 Server (minimal install) with a login user that has sudo. Task: p0a-11b.
 - P0: make the node’s name resolve on the router’s DNS, then run tools/prep-node from the controller (§8 step 3): SSH key and passwordless sudo for the Ansible user (ssh_user, D34), an optional hostname change, a stable address (a DHCP reservation on the router, preferred, or prep-node’s optional DHCP-to-static pin as the fallback), optional SSH password login off, and a clock-sync check. Task: p0a-14.
-- P0: run the first site.yml and the second make bootstrap-secrets from the controller (owner runs, D17). Task: p0a-14.
+- P0: run the first site.yml from the controller (an owner run, D17). Task: p0a-14.
 - P0: rotate the env-01 bench age key, a one-off exception to D17 held by the agent user on Oct 28, before anything real. Task: p0a-14.
 - P0: for each node that has a data disk, record its by-id path as the node’s data_disk in inventory/hosts.yml, and give the run-time wipe confirmation (D42). env-01 has none. Task: p0a-11b.
 - P0: once JARVIS DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
@@ -114,7 +113,7 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Depends on:  p0a-03
 Touches:     tools/bootstrap-secrets, tools/seal, Makefile
 Hard limits: R7; R25; R35. The script creates the internal CA, the VolSync restic password, the Grafana admin password, and each deploy’s Hermes API key, dashboard password hash, and signing secret (D16). It never overwrites. The real age private key stays out of CI (D33). D10: only the restic secret is referenced in-cluster at P0a. Both tools take an explicit env (D45).
-Done checks: A unit test with a throwaway age key shows a second run leaves the files byte-identical. Gordon runs make bootstrap-secrets on the controller and commits the SOPS output (see Gordon-only actions). One PR.
+Done checks: A unit test with a throwaway age key shows a second run leaves the files byte-identical. make bootstrap-secrets runs on the controller, by Gordon or the agent user since it needs only the .sops.yaml public recipient (D17), and its SOPS output is committed. One PR.
 ```
 
 ```text
@@ -249,7 +248,7 @@ Advances:    P0a exit check: “A SOPS-encrypted secret decrypts in-cluster.”
 Depends on:  p0a-13, p0a-02, p0a-08
 Touches:     envs/env-01/flux/, platform/flux-operator/, platform/backups/ namespace only, tools/render-cluster-vars, tools/checks/render-diff
 Hard limits: R1; R4; R25; R34. D9; D10; D11; D45 (lowercase variables, JSON lists, strict substitution, $${...} escapes, explicit env). Resources that use their own ${…} syntax set substitute: disabled. One script renders the cluster-vars ConfigMap from values/cluster-vars.yaml; tools/prep-node re-runs it after editing cluster-vars. This PR adds the cluster-vars to postBuild section to the env schema CONTRACT.md.
-Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. Gordon’s first site.yml on the fresh node, after tools/prep-node and make bootstrap-secrets (owner run, D17), passes the D42 asserts; runs no node-disk, since env-01 has no data_disk and keeps its data on root (D42); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. A second site.yml (Gordon’s or the agent user’s, D17) and Gordon’s second bootstrap-secrets change nothing. One PR.
+Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. Gordon’s first site.yml on the fresh node (an owner run, D17), after tools/prep-node and make bootstrap-secrets, passes the D42 asserts; runs no node-disk, since env-01 has no data_disk and keeps its data on root (D42); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. A second site.yml and a second bootstrap-secrets, run by Gordon or the agent user (D17), change nothing. One PR.
 ```
 
 ```text
@@ -296,7 +295,7 @@ Advances:    P0a exit check: “Renovate is installed and has opened at least on
 Advances:    P0a exit check: “Rollback drill: reverting a commit restores the prior state.”
 Depends on:  p0a-04, p0a-05, p0a-14, p0a-15, p0a-16, p0a-17
 Touches:     Makefile, tools/verify/p0a
-Hard limits: R35; R37. D17; D42. The script checks: kubectl wait Ready on every Flux Kustomization, GitRepository and HelmRelease, failing when none are found; the restic Secret in platform-backups, its value unprinted; each node’s role labels equal to its node_roles; the enablelb label on exactly the edge set. It lists the owner checklist as blank lines to fill in and, when its own checks pass, ends with how many owner items remain. Owner checklist: Gordon’s second site.yml and second make bootstrap-secrets outputs, the seeded PR for each rule check, the Renovate PR, and the p0a-16 rollback log.
+Hard limits: R35; R37. D17; D42. The script checks: kubectl wait Ready on every Flux Kustomization, GitRepository and HelmRelease, failing when none are found; the restic Secret in platform-backups, its value unprinted; each node’s role labels equal to its node_roles; the enablelb label on exactly the edge set. It lists the owner checklist as blank lines to fill in and, when its own checks pass, ends with how many owner items remain. Owner checklist: the second site.yml and second make bootstrap-secrets outputs, whoever ran them, the seeded PR for each rule check, the Renovate PR, and the p0a-16 rollback log.
 Done checks: make verify PHASE=p0a exits 0 on the live cluster, and non-zero against an inventory copy that gives a node a role it lacks. The output plus the owner checklist covers every P0a exit check. One PR.
 ```
 
