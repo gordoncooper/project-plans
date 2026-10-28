@@ -411,8 +411,9 @@ jarvis/
     inventory/roles.yml/       the core constructed inventory, passed as the second -i: the constructed config turns node_roles into groups, and groups.yml keeps an empty data_disk group (D42)
     ansible/                   ansible.cfg, site.yml, roles/{base-os, node-disk, k3s, kubeconfig, flux-operator}/ (values from envs/<env>/values/cluster-vars.yaml)
   platform/                    layer 2: only what Flux reconciles; each folder has CONTRACT.md
-    flux-operator/             operator HelmRelease (Flux-managed after the one-time Ansible apply, R1) and the platform-controllers kustomization.yaml, which lists traefik, kyverno and backups/controller
-    traefik/                   HelmChartConfig (applied in kube-system); routes are plain Ingress
+    kustomization.yaml         the platform-controllers index (the Flux path ./platform): one line per controller (traefik, cert-manager, kyverno, backups/controller)
+    flux-operator/             operator HelmRelease only (Flux-managed after the one-time Ansible apply, R1)
+    traefik/                   HelmChartConfig (applied in kube-system); routes are plain Ingress; CONTRACT.md records the bundled chart version and the k3s pin it was checked against (D5)
     cert-manager/              controller/ + config/ (internal CA, wildcard *.${dns_suffix})
     app-dns/                   CoreDNS + k8s_gateway
     kyverno/                   Kyverno HelmRelease (classic ClusterPolicy only)

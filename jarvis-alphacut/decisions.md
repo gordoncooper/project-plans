@@ -36,9 +36,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D5
 
-- Decision: the k3s version is pinned in `cluster-vars.yaml` and changes only by PR. Renovate does not manage it.
-- Reason: R33 requires that pin. Renovate manages image digests and does not manage the k3s host binary.
-- Where: k3s role (`p0a-12`).
+- Decision: the k3s version is pinned in `cluster-vars.yaml` and changes only by PR. Renovate does not manage it. A k3s bump is also a Traefik bump: the Traefik CONTRACT.md records the bundled chart version and the k3s version it was checked against, and ci fails until a bump PR re-checks `platform/traefik` and updates that line.
+- Reason: R33 requires that pin. Renovate manages image digests and does not manage the k3s host binary. The bundled Traefik chart comes only from the k3s pin, so a bump could silently break the HelmChartConfig.
+- Where: k3s role (`p0a-12`), Traefik (`p0b-04`).
 - Status: accepted-with-plan default.
 
 ## D6
