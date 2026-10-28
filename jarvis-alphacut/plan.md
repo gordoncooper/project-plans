@@ -15,7 +15,7 @@ One list, from §8. Each action names the task that waits on it.
 - Before P0: archive the previous system’s repos read-only. Task: p0a-01.
 - Before P0: every token, key and webhook for the new build is new; none is reused. Task: p0a-01.
 - P0: create the two repos under gordoncooper (D1), before anything writes to jarvis. Task: p0a-01.
-- P0: after p0a-06 merges, set branch protection requiring the ci check. Task: p0a-05.
+- P0: after p0a-06 merges, set branch protection requiring the ci check (classic protection, ci required and the branch up to date; free GitHub enforces it while the repo is public, §9). Task: p0a-05.
 - P0: set the owner-name repo variable on jarvis (D44). Task: p0a-07.
 - P0: invite gordon5417-ai (write) to jarvis and jarvis-apps only. Task: p0a-03.
 - P0: accept the two invites signed in as gordon5417-ai. Task: p0a-03.
@@ -24,8 +24,8 @@ One list, from §8. Each action names the task that waits on it.
 - P0: install Renovate. Task: p0a-15.
 - P0: run make bootstrap-secrets on the bastion and commit its output. Task: p0a-04.
 - P0: wipe the env-01 node (a separate spare compute node; never a node of the previous system). Task: p0a-11b.
-- P0: fresh-install Ubuntu 26.04 Server (minimal install) with Gordon’s SSH key on the env’s SSH user (ssh_user, default ubuntu; D34). Task: p0a-11b.
-- P0: set a DHCP reservation. Task: p0a-11b.
+- P0: fresh-install Ubuntu 26.04 Server (minimal install) with a login user that has sudo. Task: p0a-11b.
+- P0: make the node’s name resolve on the router’s DNS, then run tools/prep-node from the controller (§8 step 3): SSH key and passwordless sudo for the Ansible user (ssh_user, D34), an optional hostname change, a stable address (prep-node’s optional DHCP-to-static pin, or a DHCP reservation on the router), optional SSH password login off, and a clock-sync check. Task: p0a-14.
 - P0: run the first and second site.yml and the second make bootstrap-secrets from the controller (owner runs, D17). Task: p0a-14.
 - P0: for each node that has a data disk, record its by-id path as the node’s data_disk in inventory/hosts.yml, and give the run-time wipe confirmation (D42). env-01 has none. Task: p0a-11b.
 - P0: once JARVIS DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
@@ -189,7 +189,7 @@ Why:         The blank node has to match the §4 OS before k3s is installed (R1,
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-03, p0a-05a
 Touches:     infra/ansible/roles/base-os, infra/ansible/ansible.cfg, infra/ansible/site.yml
-Hard limits: R1 (Ansible only in infra/); R10; §4 Ubuntu 26.04 minimal. D46 (journald SystemMaxUse 2G). The time zone comes from the env schema. unattended-upgrades and the apt-daily-upgrade timer are off, and the package-list refresh stays on; our roles may still install packages. Upgrades and reboots are Gordon’s (§8). Outbound 123/udp and 4460/tcp stay open for chrony. Use Ansible validate: where a tool can check its own file. Ansible is the pinned PyPI ansible package, which bundles community.general. No Tailscale or VPN on the node (R28).
+Hard limits: R1 (Ansible only in infra/); R10; §4 Ubuntu 26.04 minimal. D46 (journald SystemMaxUse 2G). The time zone comes from the env schema. unattended-upgrades and the apt-daily-upgrade timer are off, and the package-list refresh stays on; our roles may still install packages. Upgrades and reboots are Gordon’s (§8). Outbound 123/udp and 4460/tcp stay open for chrony. Use Ansible validate: where a tool can check its own file. Ansible is the pinned PyPI ansible package, which bundles community.general. Collections come only from that package: ansible.cfg sets a repo-local collections_path, so stray ~/.ansible copies are ignored, and there is no Galaxy requirements file until a collection outside the package is needed. No Tailscale or VPN on the node (R28).
 Done checks: ansible-playbook --syntax-check site.yml passes against the env-00 inventory. Small tests parse the rendered files for the journald cap, the NTS pools, and upgrades off. The live proof is p0a-14: chronyc -N authdata shows NTS, and no upgrade timer is active. One PR.
 ```
 
@@ -200,7 +200,7 @@ Why:         Roles decide where each play runs, and one block per node holds the
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-05a
 Touches:     envs/env-01/inventory/hosts.yml, envs/env-00/inventory/hosts.yml, infra/inventory/roles.yml, schema/ (validator, CONTRACT.md)
-Hard limits: R3; R4; R25. D42 (shape, schema rules, constructed config); D43. infra/inventory/roles.yml is the one constructed config, passed as a second -i and never copied into an env. This PR adds the node roles and labels section to the env schema CONTRACT.md (D45).
+Hard limits: R3; R4; R25. D42 (shape, schema rules, constructed config); D43. infra/inventory/roles.yml is the core constructed inventory (a folder: the constructed config plus an empty data_disk group), passed as a second -i and never copied into an env. This PR adds the node roles and labels section to the env schema CONTRACT.md (D45).
 Done checks: Behavior tests show the schema rejects an unknown role, an env without exactly one control_plane or exactly one backup host, an unknown host key, and a data disk id that is not a whole-disk /dev/disk/by-id path. In ci, ansible-inventory --graph on env-00 shows each role and data_disk as a group, with no leading underscore. One PR.
 ```
 
@@ -225,7 +225,7 @@ Advances:    P0b exit check: “Restore drill: a deleted volume is restored by V
 Depends on:  p0a-11b
 Touches:     infra/ansible/roles/k3s, envs/env-01/values/cluster-vars.yaml
 Hard limits: R1; §7 (kube and system reserves about 1 GB each, eviction thresholds); R28; R31; R33. D2; D3; D4; D5; D6; D34; D42; D46. The k3s version and binary checksum are pinned in cluster-vars.yaml and change only by PR; Renovate does not manage them. The server installs on control_plane, and every other host joins as an agent (D42 Join): server https://<control_plane inventory_hostname>:6443, its own node-name, the token var, no cluster-init and no node-label. The token is the server’s node-token, read by a slurp delegated to control_plane under no_log, never stored in Git, inventory, cluster-vars or SOPS (D17, R25). A task on control_plane reconciles the role labels and servicelb’s enablelb label on every run with kubernetes.core (python3-kubernetes from apt). The role asserts an amd64 host. site.yml refuses a host that already runs k3s unless /etc/jarvis/env holds this env’s name; the first run writes that marker. The node is the spare env-01 box, freshly installed by Gordon.
-Done checks: A small test of the rendered config.yaml shows --cluster-init, secrets encryption, the CIDRs, the reserves, the snapshot directory, node-name, no node-label, and no INSTALL_K3S_* variable. The rendered agent config shows the server URL, its own node-name and no cluster-init or node-label. A host-pattern check selects 6 agent hosts on env-00 and none on env-01, where the agent play exits 0. A container test on ubuntu:26.04 shows site.yml refuses a host that runs k3s without the marker. The live proof is p0a-14. One PR.
+Done checks: A small test of the rendered config.yaml shows --cluster-init, secrets encryption, the CIDRs, the reserves, the snapshot directory, node-name, no node-label, and no INSTALL_K3S_* variable. The rendered agent config shows the server URL, its own node-name and no cluster-init or node-label. A host-pattern check selects 6 agent hosts on env-00 and none on env-01, where the agent play exits 0. A localhost play with a fake systemctl shows site.yml refuses a host that runs k3s without the marker. The live proof is p0a-14. One PR.
 ```
 
 ```text
@@ -235,7 +235,7 @@ Why:         The age key and the first Flux apply are the bootstrap bridge (R1, 
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-12, p0a-04
 Touches:     infra/ansible/roles/flux-operator, infra/ansible/roles/kubeconfig, infra/ansible/site.yml, platform/flux-operator/ (chart pin)
-Hard limits: R1; R25. D11; D17; D34; D42. The private age key is applied once as flux-system/sops-age, which Flux never reconciles, with no_log on every task that handles it. A full site.yml needs the age key, so it is an owner run (D17). kubeconfig is its own small role that writes only the running user’s ~/.kube/config. Tags are set at role or play level (§11). The operator chart version has one pin, in platform/flux-operator/, which this role reads and Renovate bumps.
+Hard limits: R1; R25. D11; D17; D34; D42. The private age key is applied once as flux-system/sops-age, which Flux never reconciles, with no_log on every task that handles it. A full site.yml needs the age key, so it is an owner run (D17). kubeconfig is its own small role that writes only the running user’s ~/.kube/config, with backup: true, so each change leaves a timestamped copy beside it. Tags are set at role or play level (§11). The operator chart version has one pin, in platform/flux-operator/, which this role reads and Renovate bumps.
 Done checks: site.yml runs in §8 order: base-os on all, node-disk on data_disk, the k3s server on control_plane, the k3s agent on all:!control_plane, then kubeconfig and flux-operator on control_plane. site.yml --tags kubeconfig runs only the kubeconfig role. The live proof is p0a-14. One PR.
 ```
 
@@ -247,8 +247,8 @@ Advances:    P0a exit check: “From a blank node, every Flux object reports Rea
 Advances:    P0a exit check: “A SOPS-encrypted secret decrypts in-cluster.”
 Depends on:  p0a-13, p0a-02, p0a-08
 Touches:     envs/env-01/flux/, platform/flux-operator/, platform/backups/ namespace only, tools/render-cluster-vars, tools/checks/render-diff
-Hard limits: R1; R4; R25; R34. D9; D10; D11; D45 (lowercase variables, JSON lists, strict substitution, $${...} escapes, explicit env). Resources that use their own ${…} syntax set substitute: disabled. One script renders the cluster-vars ConfigMap from values/cluster-vars.yaml. This PR adds the cluster-vars to postBuild section to the env schema CONTRACT.md.
-Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. Gordon’s first site.yml on the fresh node (owner run, D17) passes the D42 asserts; runs no node-disk, since env-01 has no data_disk and keeps its data on root (D42); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. Gordon’s second site.yml and second bootstrap-secrets change nothing. One PR.
+Hard limits: R1; R4; R25; R34. D9; D10; D11; D45 (lowercase variables, JSON lists, strict substitution, $${...} escapes, explicit env). Resources that use their own ${…} syntax set substitute: disabled. One script renders the cluster-vars ConfigMap from values/cluster-vars.yaml; tools/prep-node re-runs it after editing cluster-vars. This PR adds the cluster-vars to postBuild section to the env schema CONTRACT.md.
+Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. Gordon’s first site.yml on the fresh node, after tools/prep-node and make bootstrap-secrets (owner run, D17), passes the D42 asserts; runs no node-disk, since env-01 has no data_disk and keeps its data on root (D42); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. Gordon’s second site.yml and second bootstrap-secrets change nothing. One PR.
 ```
 
 ```text
@@ -295,7 +295,7 @@ Advances:    P0a exit check: “Renovate is installed and has opened at least on
 Advances:    P0a exit check: “Rollback drill: reverting a commit restores the prior state.”
 Depends on:  p0a-04, p0a-05, p0a-14, p0a-15, p0a-16, p0a-17
 Touches:     Makefile, tools/verify/p0a
-Hard limits: R35; R37. D17; D42. The script checks: kubectl wait Ready on every Flux Kustomization, GitRepository and HelmRelease, failing when none are found; the restic Secret in platform-backups, its value unprinted; each node’s role labels equal to its node_roles; the enablelb label on exactly the edge set. Owner checklist: Gordon’s second site.yml and second make bootstrap-secrets outputs, the seeded PR for each rule check, the Renovate PR, and the p0a-16 rollback log.
+Hard limits: R35; R37. D17; D42. The script checks: kubectl wait Ready on every Flux Kustomization, GitRepository and HelmRelease, failing when none are found; the restic Secret in platform-backups, its value unprinted; each node’s role labels equal to its node_roles; the enablelb label on exactly the edge set. It lists the owner checklist as blank lines to fill in and, when its own checks pass, ends with how many owner items remain. Owner checklist: Gordon’s second site.yml and second make bootstrap-secrets outputs, the seeded PR for each rule check, the Renovate PR, and the p0a-16 rollback log.
 Done checks: make verify PHASE=p0a exits 0 on the live cluster, and non-zero against an inventory copy that gives a node a role it lacks. The output plus the owner checklist covers every P0a exit check. One PR.
 ```
 
