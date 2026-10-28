@@ -118,8 +118,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D15
 
-- Decision: restic’s weekly prune runs Sunday at 04:00 America/Los_Angeles. VolSync schedules take TZ from cluster-vars.
-- Reason: retention includes a weekly prune and no clock is given (§7). env-01’s time zone is America/Los_Angeles (D21).
+- Decision: restic prunes weekly through VolSync’s `pruneIntervalDays: 7`, an interval, not a clock; the ReplicationSource CRD rejects `CRON_TZ`. The Hermes pod takes TZ from cluster-vars.
+- Reason: retention includes a weekly prune (§7), and VolSync schedules have no time zone. env-01’s time zone is America/Los_Angeles (D21).
 - Where: backup config (`p0b-09`), Hermes pod (`p2-09`).
 - Status: accepted-with-plan default.
 
@@ -337,7 +337,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Labels: `role.<dns_suffix>/<role>=true` for each role; the prefix is reserved for them. A task on `control_plane` sets them with kubernetes.core on every run and removes prefixed labels for dropped roles. No k3s `node-label`, which applies only at registration.
   - Edge: 80/443 (Traefik) and 53 (App DNS) land on the `edge` nodes. Every env must give `edge` to at least one node; there is no fallback to `control_plane`, and the schema rejects an env with no `edge` host. The same task reconciles servicelb’s `svccontroller.k3s.cattle.io/enablelb=true` label onto exactly that set on every run.
   - Asserts: roles are declared, never detected. Before any change, a `gpu` host must have an NVIDIA device. On a host with `data_disk`, node-disk mounts `/var/lib/jarvis` by `LABEL=jarvis-data` before k3s runs; a failed mount stops the run.
-  - Disk: the data disk mounts at `/var/lib/jarvis` by `LABEL=jarvis-data` with `nofail`; k3s and images stay on root. Default layout: `local-path/`, `backup/etcd-snapshots/`, `backup/restic/`. Same-disk backups cover mistakes and rollback, not disk loss (R31).
+  - Disk: the data disk mounts at `/var/lib/jarvis` by `LABEL=jarvis-data` with `nofail`; k3s and images stay on root. Default layout: `local-path/`, `backup/etcd-snapshots/`, and one restic repo per PVC at `backup_path/<volume>`. Same-disk backups cover mistakes and rollback, not disk loss (R31).
   - Boot safety: node-disk adds a `k3s.service` drop-in with `RequiresMountsFor=` the configured `local_path_data` and `backup_path` (D3), so k3s never starts without the disk.
   - Wipe safety (node-disk, before k3s first starts): refuse the disk that holds `/`. A disk that already carries `jarvis-data` is mounted, never formatted. Any other disk is formatted only with both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>[,<node>:<disk id>...]`, in which each host must find its own exact pair; `wipe_confirmed: true` alone never permits it. Other cases (a disk mounted elsewhere, a second labelled disk, a non-empty mount point, LVM or btrfs root) are listed in the Ansible README as not checked and rely on the two confirmations.
   - The by-id path holds the disk serial; that is accepted as low risk in a public repo.
