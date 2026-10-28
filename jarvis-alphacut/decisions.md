@@ -55,7 +55,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Profile schema: its own `services/hermes/core/schema/CONTRACT.md`, created at `p2-04`
   - Code delivery provider: `docs/code-delivery/CONTRACT.md`
   - Build agent: `docs/build-agent/CONTRACT.md`
-  - Exposure: `platform/traefik/CONTRACT.md` (cert-manager and lan-dns component contracts point at it)
+  - Exposure: `platform/traefik/CONTRACT.md` (cert-manager and app-dns component contracts point at it)
   - Backups: `platform/backups/CONTRACT.md`
   - Login and alert path: `services/observability/CONTRACT.md`
   - Model provider, assistant API, and skill contract: `services/hermes/core/CONTRACT.md`
@@ -335,7 +335,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Plays: base-os on `all`, node-disk on `data_disk`, the k3s server on `control_plane`, the k3s agent on `all:!control_plane`, then kubeconfig and flux-operator on `control_plane`; `node-name` comes from `inventory_hostname`.
   - Join: every host that is not `control_plane` joins as a k3s agent; `workers`, `storage`, `backup`, `gpu` and `edge` are scheduling labels only, and the `control_plane` host runs the server only. An agent’s config sets `server: https://<control_plane inventory_hostname>:6443`, its own `node-name` and the token, with no `cluster-init` or `node-label`. The token is the server’s node-token, read by a `slurp` delegated to `control_plane` under `no_log`, so `--limit` runs still work; it is never in Git, the inventory, cluster-vars or SOPS (D17, R25).
   - Labels: `role.<dns_suffix>/<role>=true` for each role; the prefix is reserved for them. A task on `control_plane` sets them with kubernetes.core on every run and removes prefixed labels for dropped roles. No k3s `node-label`, which applies only at registration.
-  - Edge: 80/443 (Traefik) and 53 (JARVIS DNS) land on the `edge` nodes. Every env must give `edge` to at least one node; there is no fallback to `control_plane`, and the schema rejects an env with no `edge` host. The same task reconciles servicelb’s `svccontroller.k3s.cattle.io/enablelb=true` label onto exactly that set on every run.
+  - Edge: 80/443 (Traefik) and 53 (App DNS) land on the `edge` nodes. Every env must give `edge` to at least one node; there is no fallback to `control_plane`, and the schema rejects an env with no `edge` host. The same task reconciles servicelb’s `svccontroller.k3s.cattle.io/enablelb=true` label onto exactly that set on every run.
   - Asserts: roles are declared, never detected. Before any change, a `gpu` host must have an NVIDIA device. On a host with `data_disk`, node-disk mounts `/var/lib/jarvis` by `LABEL=jarvis-data` before k3s runs; a failed mount stops the run.
   - Disk: the data disk mounts at `/var/lib/jarvis` by `LABEL=jarvis-data` with `nofail`; k3s and images stay on root. Default layout: `local-path/`, `backup/etcd-snapshots/`, `backup/restic/`. Same-disk backups cover mistakes and rollback, not disk loss (R31).
   - Boot safety: node-disk adds a `k3s.service` drop-in with `RequiresMountsFor=` the configured `local_path_data` and `backup_path` (D3), so k3s never starts without the disk.
