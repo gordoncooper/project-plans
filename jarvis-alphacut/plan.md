@@ -25,8 +25,9 @@ One list, from §8. Each action names the task that waits on it.
 - P0: run make bootstrap-secrets on the bastion and commit its output. Task: p0a-04.
 - P0: wipe the env-01 node (a separate spare compute node; never a node of the previous system). Task: p0a-11b.
 - P0: fresh-install Ubuntu 26.04 Server (minimal install) with a login user that has sudo. Task: p0a-11b.
-- P0: make the node’s name resolve on the router’s DNS, then run tools/prep-node from the controller (§8 step 3): SSH key and passwordless sudo for the Ansible user (ssh_user, D34), an optional hostname change, a stable address (prep-node’s optional DHCP-to-static pin, or a DHCP reservation on the router), optional SSH password login off, and a clock-sync check. Task: p0a-14.
-- P0: run the first and second site.yml and the second make bootstrap-secrets from the controller (owner runs, D17). Task: p0a-14.
+- P0: make the node’s name resolve on the router’s DNS, then run tools/prep-node from the controller (§8 step 3): SSH key and passwordless sudo for the Ansible user (ssh_user, D34), an optional hostname change, a stable address (a DHCP reservation on the router, preferred, or prep-node’s optional DHCP-to-static pin as the fallback), optional SSH password login off, and a clock-sync check. Task: p0a-14.
+- P0: run the first site.yml and the second make bootstrap-secrets from the controller (owner runs, D17). Task: p0a-14.
+- P0: rotate the env-01 bench age key, a one-off exception to D17 held by the agent user on Oct 28, before anything real. Task: p0a-14.
 - P0: for each node that has a data disk, record its by-id path as the node’s data_disk in inventory/hosts.yml, and give the run-time wipe confirmation (D42). env-01 has none. Task: p0a-11b.
 - P0: once JARVIS DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
 - P0: trust the root cert on each device. Task: p0b-08.
@@ -235,7 +236,7 @@ Why:         The age key and the first Flux apply are the bootstrap bridge (R1, 
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-12, p0a-04
 Touches:     infra/ansible/roles/flux-operator, infra/ansible/roles/kubeconfig, infra/ansible/site.yml, platform/flux-operator/ (chart pin)
-Hard limits: R1; R25. D11; D17; D34; D42. The private age key is applied once as flux-system/sops-age, which Flux never reconciles, with no_log on every task that handles it. A full site.yml needs the age key, so it is an owner run (D17). kubeconfig is its own small role that writes only the running user’s ~/.kube/config, with backup: true, so each change leaves a timestamped copy beside it. Tags are set at role or play level (§11). The operator chart version has one pin, in platform/flux-operator/, which this role reads and Renovate bumps.
+Hard limits: R1; R25. D11; D17; D34; D42. The private age key is applied once as flux-system/sops-age, which Flux never reconciles, with no_log on every task that handles it. site.yml needs the age key only while flux-system/sops-age is absent, so the first run on a fresh node and an age-key swap are owner runs; later runs may be the agent user’s (D17). kubeconfig is its own small role that writes only the running user’s ~/.kube/config, with backup: true, so each change leaves a timestamped copy beside it. Tags are set at role or play level (§11). The operator chart version has one pin, in platform/flux-operator/, which this role reads and Renovate bumps.
 Done checks: site.yml runs in §8 order: base-os on all, node-disk on data_disk, the k3s server on control_plane, the k3s agent on all:!control_plane, then kubeconfig and flux-operator on control_plane. site.yml --tags kubeconfig runs only the kubeconfig role. The live proof is p0a-14. One PR.
 ```
 
@@ -248,7 +249,7 @@ Advances:    P0a exit check: “A SOPS-encrypted secret decrypts in-cluster.”
 Depends on:  p0a-13, p0a-02, p0a-08
 Touches:     envs/env-01/flux/, platform/flux-operator/, platform/backups/ namespace only, tools/render-cluster-vars, tools/checks/render-diff
 Hard limits: R1; R4; R25; R34. D9; D10; D11; D45 (lowercase variables, JSON lists, strict substitution, $${...} escapes, explicit env). Resources that use their own ${…} syntax set substitute: disabled. One script renders the cluster-vars ConfigMap from values/cluster-vars.yaml; tools/prep-node re-runs it after editing cluster-vars. This PR adds the cluster-vars to postBuild section to the env schema CONTRACT.md.
-Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. Gordon’s first site.yml on the fresh node, after tools/prep-node and make bootstrap-secrets (owner run, D17), passes the D42 asserts; runs no node-disk, since env-01 has no data_disk and keeps its data on root (D42); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. Gordon’s second site.yml and second bootstrap-secrets change nothing. One PR.
+Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. Gordon’s first site.yml on the fresh node, after tools/prep-node and make bootstrap-secrets (owner run, D17), passes the D42 asserts; runs no node-disk, since env-01 has no data_disk and keeps its data on root (D42); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. A second site.yml (Gordon’s or the agent user’s, D17) and Gordon’s second bootstrap-secrets change nothing. One PR.
 ```
 
 ```text
