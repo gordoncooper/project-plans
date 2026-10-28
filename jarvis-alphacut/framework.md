@@ -454,6 +454,10 @@ jarvis-apps/
 - An env folder only sets values and turns features on or off; it never holds core logic.
 - env-01 is the baseline and prod: one node, 14 GiB RAM, CPU only, a 256 GB NVMe OS disk with 100 GB on /, and no data disk: Jarvis data stays on root on purpose (D42).
 - Each env has a written purpose, what deploys to it and how changes are promoted, in envs/<env>/README.md.
+- Recommended node disk layout (guidance for installing a node's OS from scratch; not checked by CI). Every node keeps the same mount points, so only the disk under /var/lib/jarvis differs:
+  - Single disk: EFI 1 GB (vfat, /boot/efi), /boot 2 GB (ext4), and the rest as LVM vg-os with lv-root 60 GB (ext4, /: OS, k3s and images) and lv-data (ext4, label jarvis-data, /var/lib/jarvis), leaving about 10% of vg-os free for growth.
+  - With a data disk: the OS disk uses the same EFI, /boot and vg-os layout, and lv-root may grow into the rest. The data disk is the whole disk that node-disk formats and mounts at /var/lib/jarvis by LABEL=jarvis-data (D42).
+  - Both: local_path_data and backup_path stay under /var/lib/jarvis (D3), and no swap. Data on its own filesystem means full volumes or backups never fill /.
 
 ### Naming
 
