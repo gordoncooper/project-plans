@@ -452,7 +452,7 @@ jarvis-apps/
 ### Env model
 
 - An env folder only sets values and turns features on or off; it never holds core logic.
-- env-01 is the baseline and prod: one node, 14 GiB RAM, CPU only, a 256 GB NVMe OS disk with 100 GB on /, and no data disk: Jarvis data stays on root on purpose (D42).
+- env-01 is the baseline and prod: one node, 14 GiB RAM, CPU only, a 256 GB NVMe OS disk with 100 GB on / and a ~112 GB lv-data at /var/lib/jarvis on the same disk, and no data disk (D42).
 - Each env has a written purpose, what deploys to it and how changes are promoted, in envs/<env>/README.md.
 - Recommended node disk layout (guidance for installing a node's OS from scratch; not checked by CI). Every node keeps the same mount points, so only the disk under /var/lib/jarvis differs:
   - Single disk: EFI 1 GB (vfat, /boot/efi), /boot 2 GB (ext4), and the rest as LVM vg-os with lv-root 60 GB (ext4, /: OS, k3s and images) and lv-data (ext4, label jarvis-data, /var/lib/jarvis), leaving about 10% of vg-os free for growth.
@@ -474,7 +474,7 @@ jarvis-apps/
 - Lane limits (per repo, in the lane workflow, not env values): 30-minute run timeout; fix cap 2 runs (first try plus one fix).
 - Bot tier map (env-01; R23): mid = concierge, inbox reply drafting and homelab chat replies; cheap = cron jobs, inbox triage, homelab checks, foreman reports and spec-writer drafts; frontier = on demand only. Hermes does not run coding agents: code-factory:hard is a Cursor lane setting in the Actions lane job, not a Hermes tier. Lane models (builder Composer 2.5, checker Grok 4.7, code-factory:hard builder Claude, all through Cursor) and their families are set in hermes.yaml (R23, R41).
 - RAM: every container sets a memory request and limit and a CPU request, no CPU limit (R5), starting from the short D30 defaults list and tuned from Grafana as real usage shows up. Ansible sets kubelet system and kube reserves (~1 GB each) and eviction thresholds; app sizes map to quotas (small = 512 Mi and 0.5 CPU, medium = 2 Gi and 1 CPU); a Grafana alert fires when node memory use passes 80%. No coding-sandbox RAM while the sandbox is GitHub Actions. CPU floor: 4 cores.
-- Disk: about 500 GB or more for data and backups, on the node’s data disk when it has one (D42; env-01 has no data disk, so data, OS and images share the 100 GB root), split roughly OS and images ~60 GB, metrics ~10–15 GB, logs ≤20 GB, backups ≤150 GB, the rest free. Alert at 80% full.
+- Disk: about 500 GB or more for data and backups, on the node’s data disk when it has one (D42; env-01 has no data disk, so data sits on its ~112 GB lv-data on the OS disk, apart from the 100 GB root), split roughly OS and images ~60 GB, metrics ~10–15 GB, logs ≤20 GB, backups ≤150 GB, the rest free. Alert at 80% full.
 - Disk caps, each in the writer’s own config: VictoriaMetrics 30-day retention plus -storage.minFreeDiskSpaceBytes; VictoriaLogs 14-day retention plus -retention.maxDiskSpaceUsageBytes (~20 GB); restic keep 7 daily / 4 weekly / 3 monthly, pruned weekly; journald SystemMaxUse 2 GB; images by kubelet image-GC defaults.
 
 ## 8. Bootstrap
