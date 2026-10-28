@@ -121,7 +121,7 @@ Done: make verify PHASE=p1 output attached.
 - Grafana shows node, pod and disk metrics, and logs for every namespace.
 - Gatus checks every exposed endpoint; its status page (env-01: gatus.alpha.lan) loads without login on LAN and on tailnet [G].
 - Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.
-- A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.
+- A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.
 
 ### P2 — Talk to JARVIS
 

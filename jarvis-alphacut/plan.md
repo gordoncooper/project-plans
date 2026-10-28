@@ -493,7 +493,7 @@ Goal:        Write the Login and Alert path sections of the observability CONTRA
 Why:         Grafana’s built-in login and the send-only alert path are one contract, written before either is built (R8, R27, §5).
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
-Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
+Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p0b-11
 Touches:     services/observability/CONTRACT.md
 Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 80%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18).
@@ -585,7 +585,7 @@ ID:          p1-10
 Goal:        Add the disk, node-memory, node-not-ready, clock, and backup-failure alert rules, and fire them with the thresholds lowered.
 Why:         The P1 check requires those rules to fire in a test, at the §7 thresholds in normal operation (R8).
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
-Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
+Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p1-09
 Touches:     services/observability/grafana/alerts/
 Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept and the etcd-snapshot CronJob (p0b-09b).
@@ -597,7 +597,7 @@ ID:          p1-11
 Goal:        Kill the test endpoint and force a backup failure; both send a Telegram alert.
 Why:         These are the two live alert proofs that do not depend on Hermes (R8).
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
-Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
+Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p1-10
 Touches:     tools/verify/p1, platform/testapp scale
 Hard limits: R8. D12; D13. Restore the test app and the backup path when the check finishes. The verify script reads send success and does not print the bot token.
@@ -622,7 +622,7 @@ Why:         Done for the checkpoint is the attached verify output (§2, R35).
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
 Advances:    P1 exit check: “Gatus checks every exposed endpoint; its status page (env-01: gatus.alpha.lan) loads without login on LAN and on tailnet [G].”
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
-Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
+Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p1-11, p1-12, p1-08
 Touches:     Makefile, tools/verify/p1
 Hard limits: R8; R35. D17. The tailnet Gatus load is the [G] line.
@@ -634,7 +634,7 @@ Done checks: make verify PHASE=p1 exits 0 with dashboard evidence, the Gatus pag
 - Grafana shows node, pod and disk metrics, and logs for every namespace.
 - Gatus checks every exposed endpoint; its status page (env-01: gatus.alpha.lan) loads without login on LAN and on tailnet [G].
 - Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.
-- A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.
+- A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.
 
 Done = attached make verify PHASE=p1 output
 
