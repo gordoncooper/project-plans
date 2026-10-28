@@ -414,7 +414,7 @@ Why:         OQ7 is a Phase 0 test with one fallback and no further searching (R
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
 Depends on:  p0b-02, p0a-14
 Touches:     ci/checks/pvc-backup, platform/backups/controller, platform/backups/config
-Hard limits: R9; R31. No local S3 server. No volume snapshot controller (VolSync gets only the VolumeSnapshot CRD). D3; D15; D30. Prune is weekly through pruneIntervalDays: 7 (D15). The ~10-minute test ran early, right after p0b-03, as its own small PR and passed, so VolSync is the choice; the second PR writes that choice into the backup CONTRACT.md config section and adds the R31 check, retention and prune. The R31 check is small: every PVC and StatefulSet volumeClaimTemplate has a ReplicationSource or the p0b-02 backup: none annotation inside the allow-list. It does not see PVCs a HelmRelease renders; p0b-09b replaces it. Outcome: VolSync stays; the follow-up is the rest-server and the enrollment policy (p0b-09a, p0b-09b), not another tool search.
+Hard limits: R9; R31. No local S3 server. No volume snapshot controller (VolSync gets only the VolumeSnapshot CRD). D3; D15; D30. Prune is weekly through pruneIntervalDays: 7 (D15). The ~10-minute test ran early, right after p0b-03, as its own small PR and passed, so VolSync is the choice; the second PR writes that choice into the backup CONTRACT.md config section and adds the R31 check, retention and prune. The R31 check is small: every PVC and StatefulSet volumeClaimTemplate has a ReplicationSource or the p0b-02 backup: none annotation inside the allow-list. It does not see PVCs a HelmRelease renders; p0b-09c replaces it. Outcome: VolSync stays; the follow-up is the rest-server, the etcd-snapshot copy and the enrollment policy (p0b-09a, p0b-09b, p0b-09c), not another tool search.
 Done checks: A seeded PR with a PVC that has neither a backup entry nor backup: none fails ci. The log shows the VolSync test result and either a working VolSync ReplicationSource or the one CronJob, writing to backup_path. Retention in cluster-vars is 7 daily / 4 weekly / 3 monthly (§7). Two PRs.
 ```
 
@@ -431,6 +431,17 @@ Done checks: The rest-server is Ready on the backup node. A scratch volume, appl
 
 ```text
 ID:          p0b-09b
+Goal:        Copy the k3s etcd snapshots into their own restic repository on the rest-server.
+Why:         The etcd snapshots hold the cluster’s state; a restic copy adds retention, dedup and the same later path to NFS and off-site copies as the volumes (R31, D47).
+Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
+Depends on:  p0b-09a, p0a-12
+Touches:     platform/backups/config (etcd-snapshot CronJob), platform/backups/CONTRACT.md
+Hard limits: R5; R9; R31; R33. D6; D15; D17; D42; D47. k3s keeps writing its snapshots to backup_path/etcd-snapshots; the k3s config does not change. One CronJob in platform-backups, pinned to role.${dns_suffix}/control_plane=true where the snapshots are written, mounts that directory read-only and runs restic backup into a host-scope repository, initializing it if missing. Write the repository as host/etcd-snapshots; the final name follows the prefixed path scheme jarvis #83 picks, because rest-server reserves segment names such as data, keys, locks, snapshots and config. It reuses the backups-restic credentials and the cluster-vars retention (forget and prune on each run; the repository is small). Its timeZone is time_zone, and it runs shortly after each k3s snapshot (D6), one run at a time. Restore is owner-run (D17) and written in the backups CONTRACT.md: restic restore of the chosen snapshot file onto the server node, then k3s’s cluster reset with --cluster-reset-restore-path. While the rest-server’s data sits on the same disk, this adds retention and dedup, not disk-failure protection.
+Done checks: A Job created from the CronJob completes, and restic lists a snapshot in that repository holding the newest k3s snapshot file. One PR.
+```
+
+```text
+ID:          p0b-09c
 Goal:        Install Kyverno and the backup policy that enrolls every PVC, and change the R31 check to match.
 Why:         A new app has to be backed up without wiring by hand (R31, D47).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
@@ -442,13 +453,13 @@ Done checks: Kyverno admission is Ready. A scratch PVC gets its Secret and Repli
 
 ```text
 ID:          p0b-10
-Goal:        Add make restore and make restore-all, run the checksum restore drill with them, and show an etcd snapshot file on the backup path.
-Why:         P0b has to prove a deleted volume comes back with the same checksum through the command a rebuild uses, and that an etcd snapshot exists for same-node rollback (R31).
+Goal:        Add make restore and make restore-all, run the checksum restore drill with them, and restore an etcd snapshot file from restic.
+Why:         P0b has to prove a deleted volume comes back with the same checksum through the command a rebuild uses, and that an etcd snapshot exists for same-node rollback and comes back from its restic copy (R31).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by VolSync (or the restic CronJob fallback, per the Phase 0 test) and its checksum matches; an etcd snapshot exists for same-node rollback (R31).”
-Depends on:  p0b-09b, p0a-12
+Depends on:  p0b-09b, p0b-09c, p0a-12
 Touches:     Makefile, tools/restore, platform/backups/ (drill volume), platform/backups/CONTRACT.md
-Hard limits: R31. D47. The etcd snapshot is not restored in this drill. make restore APP=<app> suspends the app’s Flux Kustomization, scales its workloads to 0, and for each backed-up PVC applies one ReplicationDestination into the app’s own PVC (Direct, trigger.manual, restoreAsOf, enableFileDeletion), waits for lastManualSync, deletes it, then resumes. make restore-all runs it for every app with a backed-up PVC. restoreAsOf is a time before the loss, by default the PVC’s creation time, with an override: after a rebuild the new source backs up the fresh, empty app first, and the latest snapshot would restore that. No backup runs on a PVC while it is being restored. An empty repository restores nothing and succeeds. No dataSourceRef (D47). The drill runs make restore by hand, otherwise kubectl reads; no separate drill helper.
-Done checks: The log shows the original checksum, the delete, the make restore run, and the matching checksum, plus an etcd snapshot filename on the backup path. A restore of a PVC with no backup yet is a no-op. The drill volume is removed afterward. One PR.
+Hard limits: R31. D47. The etcd half restores the newest snapshot file from its restic repository (p0b-09b) into a scratch pod and compares its checksum with the file on the backup path. It never runs the cluster reset on env-01, which would restart the only server; that step stays the owner’s written procedure. make restore APP=<app> suspends the app’s Flux Kustomization, scales its workloads to 0, and for each backed-up PVC applies one ReplicationDestination into the app’s own PVC (Direct, trigger.manual, restoreAsOf, enableFileDeletion), waits for lastManualSync, deletes it, then resumes. make restore-all runs it for every app with a backed-up PVC. restoreAsOf is a time before the loss, by default the PVC’s creation time, with an override: after a rebuild the new source backs up the fresh, empty app first, and the latest snapshot would restore that. No backup runs on a PVC while it is being restored. An empty repository restores nothing and succeeds. No dataSourceRef (D47). The drill runs make restore by hand, otherwise kubectl reads; no separate drill helper.
+Done checks: The log shows the original checksum, the delete, the make restore run, and the matching checksum, plus an etcd snapshot filename on the backup path and the same file restored from restic with a matching checksum. A restore of a PVC with no backup yet is a no-op. The drill volume is removed afterward. One PR.
 ```
 
 ```text
@@ -577,7 +588,7 @@ Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert wi
 Advances:    P1 exit check: “A forced backup failure (VolSync or the CronJob fallback) sends a Telegram alert.”
 Depends on:  p1-09
 Touches:     services/observability/grafana/alerts/
-Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept.
+Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept and the etcd-snapshot CronJob (p0b-09b).
 Done checks: The verify log shows each rule firing under the lowered threshold and the committed rules back at 80%. One PR.
 ```
 
