@@ -438,6 +438,7 @@ jarvis/
       patches/                 Kustomize patches (sizes, node selectors on role labels)
       rendered/                GENERATED Hermes profile config, CI diff-checked
       secrets/                 <component>-<purpose>.sops.yaml, one Secret per file
+      ca.crt                   the internal CA's public root in plain text (bootstrap-secrets writes it; never the key)
     # more envs: copy env-01 when hardware exists
   .github/
     workflows/                 ci.yml (the one required ci check), admin-gate.yml (pull_request_target; reusable, also called by jarvis-apps), code-factory-lane.yml (reusable, called by jarvis-apps)
@@ -488,7 +489,7 @@ jarvis-apps/
 Format: item — created by — stored in — used by. SOPS files are envs/<env>/secrets/<component>-<purpose>.sops.yaml; an Actions secret names its repo.
 
 - age keypair — Gordon — private key offline (custody below), public key in .sops.yaml; applied once by the Ansible bootstrap as flux-system/sops-age (R25) — Flux and Ansible (SOPS decryption).
-- Internal CA root (10-year expiry) — bootstrap-secrets — SOPS; root cert trusted per device by Gordon — platform-cert-manager.
+- Internal CA root (10-year expiry) — bootstrap-secrets — SOPS; the public root is also committed plain at envs/<env>/ca.crt and trusted per device by Gordon — platform-cert-manager.
 - VolSync restic password and the rest-server login, one shared Secret — bootstrap-secrets — SOPS — platform-backups; the backup policy copies it into each backed-up PVC’s namespace with that PVC’s repository.
 - Other component secrets (Grafana admin, and for each deploy the Hermes API key and the dashboard password hash and signing secret) — bootstrap-secrets — SOPS — their own namespace only.
 - Renovate GitHub App install — Gordon — no stored secret — jarvis and jarvis-apps.
