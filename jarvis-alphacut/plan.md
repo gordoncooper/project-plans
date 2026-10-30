@@ -4,7 +4,7 @@ Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves op
 
 ## Stop and ask
 
-- None (OQ9 confirmed by Gordon 2026-10-19: §4 logs and metrics stack stands).
+- Before building p1-10, confirm with Gordon whether alert routing stays the default or changes.
 
 ## Gordon-only actions
 
@@ -600,7 +600,7 @@ Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert wi
 Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p1-09
 Touches:     services/observability/grafana/alerts/
-Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept and the etcd-snapshot CronJob (p0b-09b). It is a warning, not a page: it goes through the same alerts bot, once per failure with a long repeat interval, so a missed nightly run informs rather than demands action; the next good run clears it. Gordon decides alert routing for all alerts at this step (Telegram only, team bots, or both, and what pages versus what only logs), with Telegram as the default.
+Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept and the etcd-snapshot CronJob (p0b-09b). It is a warning, not a page: it goes through the same alerts bot, once per failure with a long repeat interval, so a missed nightly run informs rather than demands action; the next good run clears it. Every alert goes to the alerts bot’s Telegram chat.
 Done checks: The verify log shows each rule firing under the lowered threshold and the committed rules back at 80%. One PR.
 ```
 
