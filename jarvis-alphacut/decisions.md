@@ -223,7 +223,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D30
 
-- Decision: every container starts from these memory requests and is tuned from Grafana as real usage shows up: VictoriaMetrics 512Mi, VictoriaLogs 512Mi, Grafana 256Mi, Gatus 128Mi, Fluent Bit 64Mi, vmagent 128Mi, node-exporter 64Mi, kube-state-metrics 64Mi, Hermes ops 2Gi with a 3Gi limit, Hermes code-factory 1Gi with a 2Gi limit, each platform container 128Mi request and 256Mi limit. Every container has a memory request and limit and a CPU request, and no CPU limit.
+- Decision: every container starts from these memory requests and is tuned from Grafana as real usage shows up: VictoriaMetrics 512Mi, VictoriaLogs 512Mi, Grafana 256Mi, Gatus 128Mi, Fluent Bit 64Mi, vmagent 128Mi, node-exporter 64Mi, kube-state-metrics 64Mi, Hermes ops 2Gi with a 3Gi limit, Hermes code-factory 1Gi with a 2Gi limit, each platform container 128Mi request and 256Mi limit. Every long-running container (controllers, apps, DNS) has a memory request and limit and a CPU request, and no CPU limit. Short-lived chart hooks, Jobs, init containers and test pods keep the chart’s defaults; a chart default is overridden only when it causes a real problem.
 - Reason: R5 requires numbers; real usage, not up-front calculation, sets the final sizes.
 - Where: every manifest task.
 - Status: accepted-with-plan default.
