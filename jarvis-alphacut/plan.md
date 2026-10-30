@@ -403,7 +403,7 @@ Goal:        Deploy the test app and its Ingress, and prove HTTPS from the LAN.
 Why:         P0b’s reachability check needs one named HTTPS service on the internal CA (R28).
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-04, p0b-05, p0b-06, p0b-07
-Touches:     platform/testapp/, renovate.json
+Touches:     platform/testapp/, envs/<env>/flux/platform-configs/kustomization.yaml, renovate.json
 Hard limits: R5; R28. D12. Hostname testapp.alpha.lan. The app is a platform fixture, not an app-<name> hosted app (that isolation is P4a, R30). It is the platform canary: the P0b check, Gatus, the P1 log proof and the P1 alert drill use it. It never depends on services or apps, and nothing depends on it. It stays on the platform-configs Flux stage, which has no wait or healthChecks, so a crashloop blocks nothing; only a failed apply would. Pod seccomp RuntimeDefault; read-only root filesystem with only /tmp writable. Renovate tracks the image with a custom regex manager scoped to platform/testapp/ (the kubernetes manager has no default file patterns).
 Done checks: Gordon does the router forwarding and root-cert trust (framework §8 step 7) before the LAN curl. curl from the LAN to https://testapp.alpha.lan returns the known file and the cert chains to the internal CA. The tailnet half is an owner checklist item (D17). One PR.
 ```
