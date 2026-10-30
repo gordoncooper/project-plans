@@ -1,6 +1,6 @@
 # JARVIS AlphaCut — Plan
 
-Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves open are in jarvis-alphacut/decisions.md and cited here as D numbers. One PR per task. Live done checks (make verify, drills, kubectl) are the operator’s (framework §2), who attaches the output to the PR; a coding agent’s are CI or offline checks.
+Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves open are in jarvis-alphacut/decisions.md and cited here as D numbers. One PR per task. Live done checks (make verify, drills, kubectl) are the operator’s (framework §2), who attaches the output to the PR; a coding agent’s are CI or offline checks. A path move is two commits in its PR, the move alone and then the edits, so history and the diff stay reviewable.
 
 ## Stop and ask
 
@@ -27,7 +27,7 @@ One list, from §8. Each action names the task that waits on it.
 - P0: make the node’s name resolve on the router’s DNS, then run tools/prep-node from the controller (§8 step 3): SSH key and passwordless sudo for the Ansible user (ssh_user, D34), an optional hostname change, a stable address (a DHCP reservation on the router, preferred, or prep-node’s optional DHCP-to-static pin as the fallback), optional SSH password login off, and a clock-sync check. Task: p0a-14.
 - P0: run the first site.yml from the controller (an owner run, D17). Task: p0a-14.
 - P0: rotate any age key an agent user held during bootstrap (a one-off exception to D17), before real data. Task: p0a-14.
-- P0: after the P0b exit and before real data, rotate env-01’s restic credentials along with that age key (owner runs, D17); before any env holds real data, confirm both offline age-key copies and test one by decrypting a secret (§8 custody). Task: p0b-12.
+- Before any real env (deferred by Gordon past the P0b exit; open): rotate env-01’s restic credentials along with that age key (owner runs, D17), and confirm both offline age-key copies and test one by decrypting a secret (§8 custody). Task: p0b-12.
 - Deferred, not a P0b exit requirement: run the coding-agent worker as its own OS user on the bastion, with no SSH keys to nodes, no kubeconfig, no age key or sops config and no access to other users’ homes; it reads and writes only its own repo checkout and pushes through its GitHub token. Until then .cursor/cli.json is the coding agents’ only guard, and live checks stay the operator’s (§2). Trigger: before coding runs that are unattended or take untrusted input (framework §9). Task: none.
 - P0: for each node that has a data disk, record its by-id path as the node’s data_disk in inventory/hosts.yml, and give the run-time wipe confirmation (D42). env-01 has none. Task: p0a-11b.
 - P0: once App DNS and the CA exist, set router forwarding of the env’s DNS suffix and trust envs/<env>/ca.crt on the controller and tailnet test devices (framework §8 step 7). Task: p0b-08.
@@ -493,6 +493,8 @@ Done checks: The guard test lists the four new objects and passes. None of those
 
 Done = attached make verify PHASE=p0b output
 
+Status: Done on env-01 (2026-10-30), p0b-01 through p0b-12. Record: make verify PHASE=p0b ENV=env-01 at jarvis e108f67, exit 0, PASS on the LAN curl, the cert issuer and the restore checksum; the p0b-10 drill restored the newest etcd snapshot from restic with a matching hash (output attached to project-plans #22). Still open, not exit requirements: the tailnet [G] owner line (deferred by Gordon); the rotation and offline-key check before real envs (Gordon-only actions); p0b-12’s post-merge checks of etcd snapshot rotation and of the privileged-movers opt-in once an enrolled PVC exists.
+
 ## P1
 
 Goal: Gordon sees the system and gets alerts without Hermes.
@@ -600,7 +602,7 @@ Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert wi
 Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p1-09
 Touches:     services/observability/grafana/alerts/
-Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept and the etcd-snapshot CronJob (p0b-09b). It is a warning, not a page: it goes through the same alerts bot, once per failure with a long repeat interval, so a missed nightly run informs rather than demands action; the next good run clears it.
+Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept and the etcd-snapshot CronJob (p0b-09b). It is a warning, not a page: it goes through the same alerts bot, once per failure with a long repeat interval, so a missed nightly run informs rather than demands action; the next good run clears it. Alert routing beyond the one Telegram chat is decided here; until then every alert goes to the alerts bot’s chat.
 Done checks: The verify log shows each rule firing under the lowered threshold and the committed rules back at 80%. One PR.
 ```
 
