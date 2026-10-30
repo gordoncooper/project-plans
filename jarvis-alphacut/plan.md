@@ -1,6 +1,6 @@
 # JARVIS AlphaCut — Plan
 
-Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves open are in jarvis-alphacut/decisions.md and cited here as D numbers. One PR per task.
+Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves open are in jarvis-alphacut/decisions.md and cited here as D numbers. One PR per task. Live done checks (make verify, drills, kubectl) are the operator’s (framework §2), who attaches the output to the PR; a coding agent’s are CI or offline checks.
 
 ## Stop and ask
 
@@ -19,7 +19,7 @@ One list, from §8. Each action names the task that waits on it.
 - P0: set the owner-name repo variable on jarvis (D44). Task: p0a-07.
 - P0: invite gordon5417-ai (write) to jarvis and jarvis-apps only. Task: p0a-03.
 - P0: accept the two invites signed in as gordon5417-ai. Task: p0a-03.
-- P0: set up the bastion’s agent user with a Cursor login and the gordon5417-ai token, which Gordon creates signed in as gordon5417-ai and pastes onto the bastion. Task: p0a-03.
+- P0: set up the bastion’s agent user and a separate worker user. The Cursor login and the gordon5417-ai token (which Gordon creates signed in as gordon5417-ai and pastes onto the bastion) go to the worker user only. Task: p0a-03.
 - P0: generate the age key (public key in .sops.yaml, private key offline). Task: p0a-03.
 - P0: install Renovate. Task: p0a-15.
 - P0: wipe the env-01 node (a separate spare compute node; never a node of the previous system). Task: p0a-11b.
@@ -28,6 +28,7 @@ One list, from §8. Each action names the task that waits on it.
 - P0: run the first site.yml from the controller (an owner run, D17). Task: p0a-14.
 - P0: rotate any age key an agent user held during bootstrap (a one-off exception to D17), before real data. Task: p0a-14.
 - P0: after the P0b exit and before real data, rotate env-01’s restic credentials along with that age key (owner runs, D17); before any env holds real data, confirm both offline age-key copies and test one by decrypting a secret (§8 custody). Task: p0b-12.
+- P0: before the P0b exit, run the coding-agent worker as its own OS user on the bastion, with no SSH keys to nodes, no kubeconfig, no age key or sops config and no access to other users’ homes; it reads and writes only its own repo checkout and pushes through its GitHub token. .cursor/cli.json stays as a seatbelt on top. Task: p0b-12.
 - P0: for each node that has a data disk, record its by-id path as the node’s data_disk in inventory/hosts.yml, and give the run-time wipe confirmation (D42). env-01 has none. Task: p0a-11b.
 - P0: once App DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
 - P0: trust the root cert on each device. Task: p0b-08.
@@ -179,8 +180,8 @@ Why:         Fix order (§11): the deny list is the automated guard for R34. The
 Advances:    P0a exit check: “One required check on main, ci, runs every ci/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class).”
 Depends on:  p0a-06
 Touches:     .cursor/cli.json, ci/checks/cli-deny
-Hard limits: R34. Deny direct kubectl and flux writes, helm, ssh, secret decryption, and reading the age private key. Reads stay allowed. The list is a guardrail that shell wrappers can bypass, so adapters never pass --force or --yolo (p4b-04).
-Done checks: ci/checks/cli-deny dry-runs the list: kubectl apply, helm, ssh, sops decrypt and an age-key read are blocked, and kubectl get is allowed. A seeded PR that removes a whole deny class (Example: the age-key read) fails ci. One PR.
+Hard limits: R34. Deny direct kubectl and flux writes, helm writes, ssh, secret decryption, and reading the age private key. Reads stay allowed. The list is a seatbelt that shell wrappers can bypass; the worker user is the boundary (p0b-12), and adapters never pass --force or --yolo (p4b-04).
+Done checks: ci/checks/cli-deny dry-runs the list: kubectl apply, helm install, ssh, sops decrypt and an age-key read are blocked, and kubectl get is allowed. A seeded PR that removes a whole deny class (Example: the age-key read) fails ci. One PR.
 ```
 
 ```text
@@ -297,7 +298,7 @@ Advances:    P0a exit check: “Rollback drill: reverting a commit restores the 
 Depends on:  p0a-04, p0a-05, p0a-14, p0a-15, p0a-16, p0a-17
 Touches:     Makefile, tools/verify/p0a
 Hard limits: R35; R37. D17; D42. The script checks: kubectl wait Ready on every Flux Kustomization, GitRepository and HelmRelease, failing when none are found; the restic Secret in platform-backups, its value unprinted; each node’s role labels equal to its node_roles; the enablelb label on exactly the edge set. It lists the owner checklist as blank lines to fill in and, when its own checks pass, ends with how many owner items remain. infra/ansible/README.md has Recovery steps for an address change (k3s --cluster-reset), a broken FluxInstance or operator (re-apply it from the reverted checkout), a lost age key (copy flux-system/sops-age back before deleting anything) and an unsynced clock; the checklist’s rollback line points at them. Owner checklist: the second site.yml and second make bootstrap-secrets outputs, whoever ran them, the seeded PR for each rule check, the Renovate PR, and the p0a-16 rollback log.
-Done checks: make verify PHASE=p0a exits 0 on the live cluster, and non-zero against an inventory copy that gives a node a role it lacks. The output plus the owner checklist covers every P0a exit check. One PR.
+Done checks: CI passes. The operator attaches make verify PHASE=p0a output: exit 0 on the live cluster, and non-zero against an inventory copy that gives a node a role it lacks. The output plus the owner checklist covers every P0a exit check. One PR.
 ```
 
 ### Exit checks
@@ -460,7 +461,7 @@ Advances:    P0b exit check: “Restore drill: a deleted volume is restored by m
 Depends on:  p0b-09b, p0b-09c, p0a-12
 Touches:     Makefile, tools/restore, platform/backups/enrollment.yaml (pause), platform/kyverno/rbac.yaml (hold read), infra/ansible/roles/flux-operator/ (rebuild hold), platform/backups/CONTRACT.md, tools/verify/p0b (drill-log reader)
 Hard limits: R31. D47. The etcd half restores the newest snapshot file from its restic repository (p0b-09b) into a scratch pod and compares its checksum with the file on the backup path. It never runs the cluster reset on env-01, which would restart the only server; that step stays the owner’s written procedure. make restore APP=<app> suspends the app’s Flux Kustomization, scales its workloads to 0, and for each backed-up PVC applies one ReplicationDestination into the app’s own PVC (Direct, trigger.manual, restoreAsOf, enableFileDeletion), waits for lastManualSync, deletes it, then resumes. make restore-all runs it for every app with a backed-up PVC. restoreAsOf is a time before the loss, by default just before the PVC’s creation time, with an override: after a rebuild the new source backs up the fresh, empty app first, and the latest snapshot would restore that. No backup runs on a PVC while it is being restored. make restore APP=<app> fails when a PVC has no eligible snapshot, and make restore-all skips that PVC. Rebuild hold: when site.yml’s flux-operator role finds FluxInstance flux absent and restic repositories already under backup_path/restic, it writes ConfigMap kube-system/backup-rebuild-hold listing them; the pvc-backup policy keeps every generated ReplicationSource paused while the hold exists (a missing hold is not paused). make restore-all lifts it only when every listed repository has a PVC or is named in RETIRE=ns-<namespace>/pvc-<pvc>,...; one make restore never lifts it. Reason: fresh empty volumes must not back up and push the good snapshots out. Re-running site.yml on a live cluster never sets the hold. Generated sources also set retain.within: 7d, which only delays that loss (keep-within counts from the newest snapshot), so it does not replace the hold. Kyverno generate rules can’t be edited in place, so the policy carries Flux’s force annotation and a change recreates every generated Secret and ReplicationSource; a policy change must not merge during a restore. No dataSourceRef (D47). The drill runs make restore by hand, otherwise kubectl reads; no separate drill helper.
-Done checks: The log shows the original checksum, the delete, the make restore run, and the matching checksum, plus an etcd snapshot filename on the backup path and the same file restored from restic with a matching checksum. make restore of a PVC with no eligible snapshot fails and make restore-all skips it; restore-all keeps the hold while a listed repository has neither a PVC nor a RETIRE entry (ci/tests/test_restore.py). The drill volume is removed afterward. One PR.
+Done checks: CI passes. The operator’s drill log shows the original checksum, the delete, the make restore run, and the matching checksum, plus an etcd snapshot filename on the backup path and the same file restored from restic with a matching checksum. make restore of a PVC with no eligible snapshot fails and make restore-all skips it; restore-all keeps the hold while a listed repository has neither a PVC nor a RETIRE entry (ci/tests/test_restore.py). The drill volume is removed afterward. One PR.
 ```
 
 ```text
@@ -472,18 +473,18 @@ Advances:    P0b exit check: “Restore drill: a deleted volume is restored by m
 Depends on:  p0b-08, p0b-10, p0b-07
 Touches:     Makefile, tools/verify/p0b
 Hard limits: R28; R35. D17. Router forwarding of alpha.lan and the trusted root cert are Gordon’s steps on p0b-08. Nothing for Tailscale is installed on the node. verify reads the p0b-10 drill log for the restore checksum; it does not re-run the drill. Its TLS checks trust the committed envs/<env>/ca.crt explicitly (curl --cacert, openssl -CAfile), not the controller’s system trust store.
-Done checks: make verify PHASE=p0b exits 0 with the LAN curl, the cert issuer and the recorded restore checksum. Owner checklist: Gordon’s tailnet [G] paste. One PR.
+Done checks: CI passes. The operator attaches make verify PHASE=p0b output, exit 0 with the LAN curl, the cert issuer and the recorded restore checksum. Owner checklist: Gordon’s tailnet [G] paste. One PR.
 ```
 
 ```text
 ID:          p0b-12
-Goal:        Close P0b’s loose ends: finish the prune guards, confirm etcd snapshot rotation, and explain any missing privileged-movers opt-in.
+Goal:        Close P0b’s loose ends: finish the prune guards, confirm etcd snapshot rotation, explain any missing privileged-movers opt-in, and confirm the coding worker runs as its own user.
 Why:         Guards and backups have to hold on every object they protect before real data lands (R1, R31).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy (R31).”
 Depends on:  p0b-11
 Touches:     platform/flux-operator/, platform/kyverno/rbac.yaml, envs/<env>/secrets/backups-restic.sops.yaml, ci/tests/test_prune_guards.py, platform/backups/enrollment.yaml
-Hard limits: R1; R25; R31. D17. Add prune: disabled to the flux-operator HelmRelease and its OCIRepository, the Kyverno ClusterRoles and the backups-restic Secret, and list them in ci/tests/test_prune_guards.py. The Secret’s annotation sits in its SOPS file’s plain metadata, but the file’s MAC needs the age key, so that edit is an owner run. If an enrolled PVC’s namespace lacks volsync.backube/privileged-movers, fix the policy’s mutate rule, not the namespace. The env-01 restic credential and age-key rotation are Gordon’s (Gordon-only actions).
-Done checks: The guard test lists the four new objects and passes. Post-merge drill steps, not the coding agent’s: the live objects show the annotation, k3s holds no more etcd snapshot files than its retention after a few snapshot cycles, and every enrolled namespace has the opt-in. One PR.
+Hard limits: R1; R25; R31. D17. Add prune: disabled to the flux-operator HelmRelease and its OCIRepository, the Kyverno ClusterRoles and the backups-restic Secret, and list them in ci/tests/test_prune_guards.py. The Secret’s annotation sits in its SOPS file’s plain metadata, but the file’s MAC needs the age key, so that edit is an owner run. If an enrolled PVC’s namespace lacks volsync.backube/privileged-movers, fix the policy’s mutate rule, not the namespace. The env-01 restic credential and age-key rotation, and the worker user, are Gordon’s (Gordon-only actions).
+Done checks: The guard test lists the four new objects and passes. Post-merge operator checks: the live objects show the annotation, k3s holds no more etcd snapshot files than its retention after a few snapshot cycles, and every enrolled namespace has the opt-in. Gordon’s worker check: as the worker user, ssh <node>, kubectl get ns, reading the age key, listing another user’s home and reading any sops config each fail, and the worker still opens a PR. One PR.
 ```
 
 ### Exit checks
