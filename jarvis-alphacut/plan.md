@@ -19,7 +19,7 @@ One list, from §8. Each action names the task that waits on it.
 - P0: set the owner-name repo variable on jarvis (D44). Task: p0a-07.
 - P0: invite gordon5417-ai (write) to jarvis and jarvis-apps only. Task: p0a-03.
 - P0: accept the two invites signed in as gordon5417-ai. Task: p0a-03.
-- P0: set up the bastion’s agent user with a Cursor login and the gordon5417-ai token, which Gordon creates signed in as gordon5417-ai and pastes onto the bastion. Task: p0a-03.
+- P0: set up the bastion’s agent user, and its worker user with a Cursor login and the gordon5417-ai token, which Gordon creates signed in as gordon5417-ai and pastes onto the bastion. Task: p0a-03.
 - P0: generate the age key (public key in .sops.yaml, private key offline). Task: p0a-03.
 - P0: install Renovate. Task: p0a-15.
 - P0: wipe the env-01 node (a separate spare compute node; never a node of the previous system). Task: p0a-11b.
@@ -28,6 +28,7 @@ One list, from §8. Each action names the task that waits on it.
 - P0: run the first site.yml from the controller (an owner run, D17). Task: p0a-14.
 - P0: rotate any age key an agent user held during bootstrap (a one-off exception to D17), before real data. Task: p0a-14.
 - P0: after the P0b exit and before real data, rotate env-01’s restic credentials along with that age key (owner runs, D17); before any env holds real data, confirm both offline age-key copies and test one by decrypting a secret (§8 custody). Task: p0b-12.
+- P0: before the P0b exit, run the coding-agent worker as its own OS user on the bastion, with no SSH keys to nodes, no kubeconfig, no age key or sops config and no access to other users’ homes; it reads and writes only its own repo checkout and pushes through its GitHub token. .cursor/cli.json stays as a seatbelt on top. Task: p0b-12.
 - P0: for each node that has a data disk, record its by-id path as the node’s data_disk in inventory/hosts.yml, and give the run-time wipe confirmation (D42). env-01 has none. Task: p0a-11b.
 - P0: once App DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
 - P0: trust the root cert on each device. Task: p0b-08.
@@ -179,7 +180,7 @@ Why:         Fix order (§11): the deny list is the automated guard for R34. The
 Advances:    P0a exit check: “One required check on main, ci, runs every ci/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, an unknown code_delivery or build_agent value, a deny list missing a whole deny class).”
 Depends on:  p0a-06
 Touches:     .cursor/cli.json, ci/checks/cli-deny
-Hard limits: R34. Deny direct kubectl and flux writes, helm, ssh, secret decryption, and reading the age private key. Reads stay allowed. The list is a guardrail that shell wrappers can bypass, so adapters never pass --force or --yolo (p4b-04).
+Hard limits: R34. Deny direct kubectl and flux writes, helm, ssh, secret decryption, and reading the age private key. Reads stay allowed. The list is a seatbelt that shell wrappers can bypass; the worker user is the boundary (p0b-12), and adapters never pass --force or --yolo (p4b-04).
 Done checks: ci/checks/cli-deny dry-runs the list: kubectl apply, helm, ssh, sops decrypt and an age-key read are blocked, and kubectl get is allowed. A seeded PR that removes a whole deny class (Example: the age-key read) fails ci. One PR.
 ```
 
@@ -477,13 +478,13 @@ Done checks: make verify PHASE=p0b exits 0 with the LAN curl, the cert issuer an
 
 ```text
 ID:          p0b-12
-Goal:        Close P0b’s loose ends: finish the prune guards, confirm etcd snapshot rotation, and explain any missing privileged-movers opt-in.
+Goal:        Close P0b’s loose ends: finish the prune guards, confirm etcd snapshot rotation, explain any missing privileged-movers opt-in, and confirm the coding worker runs as its own user.
 Why:         Guards and backups have to hold on every object they protect before real data lands (R1, R31).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy (R31).”
 Depends on:  p0b-11
 Touches:     platform/flux-operator/, platform/kyverno/rbac.yaml, envs/<env>/secrets/backups-restic.sops.yaml, ci/tests/test_prune_guards.py, platform/backups/enrollment.yaml
-Hard limits: R1; R25; R31. D17. Add prune: disabled to the flux-operator HelmRelease and its OCIRepository, the Kyverno ClusterRoles and the backups-restic Secret, and list them in ci/tests/test_prune_guards.py. The Secret’s annotation sits in its SOPS file’s plain metadata, but the file’s MAC needs the age key, so that edit is an owner run. If an enrolled PVC’s namespace lacks volsync.backube/privileged-movers, fix the policy’s mutate rule, not the namespace. The env-01 restic credential and age-key rotation are Gordon’s (Gordon-only actions).
-Done checks: The guard test lists the four new objects and passes. Post-merge drill steps, not the coding agent’s: the live objects show the annotation, k3s holds no more etcd snapshot files than its retention after a few snapshot cycles, and every enrolled namespace has the opt-in. One PR.
+Hard limits: R1; R25; R31. D17. Add prune: disabled to the flux-operator HelmRelease and its OCIRepository, the Kyverno ClusterRoles and the backups-restic Secret, and list them in ci/tests/test_prune_guards.py. The Secret’s annotation sits in its SOPS file’s plain metadata, but the file’s MAC needs the age key, so that edit is an owner run. If an enrolled PVC’s namespace lacks volsync.backube/privileged-movers, fix the policy’s mutate rule, not the namespace. The env-01 restic credential and age-key rotation, and the worker user, are Gordon’s (Gordon-only actions).
+Done checks: The guard test lists the four new objects and passes. Post-merge drill steps, not the coding agent’s: the live objects show the annotation, k3s holds no more etcd snapshot files than its retention after a few snapshot cycles, and every enrolled namespace has the opt-in. Gordon’s worker check: as the worker user, ssh <node>, kubectl get ns and reading the age key each fail for lack of credentials, and the worker still opens a PR. One PR.
 ```
 
 ### Exit checks
