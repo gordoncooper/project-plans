@@ -382,7 +382,7 @@ Why:         Fix order (§11): components already set the fields (p0b-03 through
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-03, p0b-05
 Touches:     ci/checks/manifest-lint, ci/checks/loadbalancer
-Hard limits: R5 (memory request and limit, CPU request, no CPU limit, probes, stdout logs, Gatus when the endpoint exists). R28.
+Hard limits: R5 (memory request and limit, CPU request, no CPU limit on long-running containers, probes, stdout logs, Gatus when the endpoint exists). R28. D30: short-lived chart hooks, Jobs, init containers and test pods keep chart defaults.
 Done checks: A seeded manifest missing a memory limit fails. A seeded LoadBalancer besides Traefik and App DNS fails. Current platform manifests pass. One PR, shared with p0b-07 (same area).
 ```
 
@@ -477,13 +477,13 @@ Done checks: CI passes. The operator attaches make verify PHASE=p0b output, exit
 
 ```text
 ID:          p0b-12
-Goal:        Close P0b’s loose ends: finish the prune guards, confirm etcd snapshot rotation, and explain any missing privileged-movers opt-in.
+Goal:        Close P0b’s loose ends: finish the prune guards, make the version tests Renovate-proof, confirm etcd snapshot rotation, and explain any missing privileged-movers opt-in.
 Why:         Guards and backups have to hold on every object they protect before real data lands (R1, R31).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy (R31).”
 Depends on:  p0b-11
-Touches:     platform/flux-operator/, platform/kyverno/rbac.yaml, envs/<env>/secrets/backups-restic.sops.yaml, ci/tests/test_prune_guards.py, platform/backups/enrollment.yaml
-Hard limits: R1; R25; R31. D17. Add prune: disabled to the flux-operator HelmRelease and its OCIRepository, the Kyverno ClusterRoles and the backups-restic Secret, and list them in ci/tests/test_prune_guards.py. The Secret’s annotation sits in its SOPS file’s plain metadata, but the file’s MAC needs the age key, so that edit is an owner run. If an enrolled PVC’s namespace lacks volsync.backube/privileged-movers, fix the policy’s mutate rule, not the namespace. The env-01 restic credential and age-key rotation are Gordon’s (Gordon-only actions). The separate worker user is deferred (framework §9) and is not checked here.
-Done checks: The guard test lists the four new objects and passes. Post-merge operator checks: the live objects show the annotation, k3s holds no more etcd snapshot files than its retention after a few snapshot cycles, and every enrolled namespace has the opt-in. One PR.
+Touches:     platform/flux-operator/, platform/kyverno/rbac.yaml, envs/<env>/secrets/backups-restic.sops.yaml, ci/tests/test_prune_guards.py, ci/tests/test_backup_enrollment.py, ci/tests/test_cert_manager.py, ci/tests/test_app_dns.py, platform/backups/enrollment.yaml
+Hard limits: R1; R25; R31. D17. Add prune: disabled to the flux-operator HelmRelease and its OCIRepository, the Kyverno ClusterRoles and the backups-restic Secret, and list them in ci/tests/test_prune_guards.py. Tests check that a chart or image is pinned (an image by digest), not which version it is, so a Renovate bump passes CI (the Kyverno image tag regex, the cert-manager and k8s-gateway chart versions). The Secret’s annotation sits in its SOPS file’s plain metadata, but the file’s MAC needs the age key, so that edit is an owner run. If an enrolled PVC’s namespace lacks volsync.backube/privileged-movers, fix the policy’s mutate rule, not the namespace. The env-01 restic credential and age-key rotation are Gordon’s (Gordon-only actions). The separate worker user is deferred (framework §9) and is not checked here.
+Done checks: The guard test lists the four new objects and passes. None of those three tests asserts a literal version. Post-merge operator checks: the live objects show the annotation, k3s holds no more etcd snapshot files than its retention after a few snapshot cycles, and every enrolled namespace has the opt-in. One PR.
 ```
 
 ### Exit checks
