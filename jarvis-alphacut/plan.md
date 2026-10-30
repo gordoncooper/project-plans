@@ -1,6 +1,6 @@
 # JARVIS AlphaCut — Plan
 
-Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves open are in jarvis-alphacut/decisions.md and cited here as D numbers. One PR per task. Live done checks (make verify, drills, kubectl) are the operator’s (framework §2), who attaches the output to the PR; a coding agent’s are CI or offline checks. A path move is two commits in its PR, the move alone and then the edits, so history and the diff stay reviewable.
+Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves open are in jarvis-alphacut/decisions.md and cited here as D numbers. One PR per task. Live done checks (make verify, drills, kubectl) are the operator’s (framework §2), who attaches the output to the PR; a coding agent’s are CI or offline checks.
 
 ## Stop and ask
 
@@ -600,7 +600,7 @@ Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert wi
 Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p1-09
 Touches:     services/observability/grafana/alerts/
-Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept and the etcd-snapshot CronJob (p0b-09b). It is a warning, not a page: it goes through the same alerts bot, once per failure with a long repeat interval, so a missed nightly run informs rather than demands action; the next good run clears it. Alert routing beyond the one Telegram chat is decided here; until then every alert goes to the alerts bot’s chat.
+Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept and the etcd-snapshot CronJob (p0b-09b). It is a warning, not a page: it goes through the same alerts bot, once per failure with a long repeat interval, so a missed nightly run informs rather than demands action; the next good run clears it. Gordon decides alert routing for all alerts at this step (Telegram only, team bots, or both, and what pages versus what only logs), with Telegram as the default.
 Done checks: The verify log shows each rule firing under the lowered threshold and the committed rules back at 80%. One PR.
 ```
 
