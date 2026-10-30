@@ -97,8 +97,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D12
 
-- Decision: the P0b test app is namespace `platform-testapp`, hostname `testapp.alpha.lan`, image `docker.io/library/nginx` pinned by digest, serving a static file with a known checksum. It stays up so P1 can kill it and restore it.
-- Reason: the reachability check needs a test app, and §4 has no HTTP fixture. The image is a default beyond §4 (R9); this entry is the record.
+- Decision: the P0b test app is namespace `platform-testapp`, hostname `testapp.alpha.lan`, image `docker.io/nginxinc/nginx-unprivileged` (the non-root build: uid 101, port 8080) pinned by digest, serving a static file with a known checksum. It stays up so P1 can kill it and restore it.
+- Reason: the reachability check needs a test app, and §4 has no HTTP fixture. The image is a default beyond §4 (R9); this entry is the record. `library/nginx` runs its master process as root.
 - Where: `p0b-08`, `p1-08`, `p1-11`.
 - Status: accepted-with-plan default.
 

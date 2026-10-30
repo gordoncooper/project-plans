@@ -419,6 +419,7 @@ jarvis/
     kyverno/                   Kyverno HelmRelease (classic ClusterPolicy only)
     backups/                   controller/ (VolSync, restic rest-server) + config/ (the Kyverno backup policy, the etcd-snapshot CronJob)
     app-hosting/               ResourceSet template: ns, quota, netpol, SA, GitRepository, impersonated Kustomization
+    testapp/                   the platform canary (D12), on the platform-configs stage
   services/                    layer 3; each component folder has CONTRACT.md
     observability/             victoria-metrics, victoria-logs, fluent-bit, vmagent, grafana/{dashboards,alerts}, gatus
     hermes/
@@ -428,6 +429,7 @@ jarvis/
       deploy/ops/              overlay of core/base; profiles/{concierge,inbox,homelab}/{SOUL.md,profile.yaml,skills/,evals/}
       deploy/code-factory/     overlay of core/base; profiles/{foreman,spec-writer}/; lanes/{builder,checker}/, lanes/agents/cursor.sh (build agent adapter);
                                publisher/; sandbox/ (lane workflow contract)
+  apps/                        the apps Flux stage path; a placeholder until P4a app hosting (hosted app code lives in jarvis-apps)
   envs/
     env-00/                    never-deployed 7-node example env that sets every schema key (D43)
     env-01/
@@ -524,7 +526,7 @@ Format: item — created by — stored in — used by. SOPS files are envs/<env>
 4. [Gordon] The first site.yml on env-01 (as ssh_user, every task as root): OS config, the data disk if the node has one (D42), k3s from /etc/rancher/k3s/config.yaml (Ubuntu’s sudo-rs drops INSTALL_K3S_* variables), the data and backup paths, the age key (R25), and the one-time Flux Operator and FluxInstance apply (Flux manages both afterwards, R1). site.yml refuses any host that already runs k3s unless it carries this env’s marker file (/etc/jarvis/env), which the first run writes. Owner runs: the first site.yml, an age-key swap and anything else that needs the age key are Gordon’s (D17); once flux-system/sops-age exists, later site.yml runs need no age key and the agent user may run them.
 5. FluxInstance syncs envs/env-01/flux; Renovate opens PRs; P0a checks (make verify PHASE=p0a).
 6. Traefik with plain Ingress (OQ8). Then cert-manager’s internal CA (wildcard *.alpha.lan), then App DNS serving the alpha.lan zone.
-7. [Gordon] Router forwarding of alpha.lan to App DNS; trust the root cert on each device.
+7. [Gordon] Per env: the router forwards the env’s DNS suffix (env-01: alpha.lan) to the App DNS LoadBalancer address (on a dnsmasq router, a server=/<suffix>/<address> rule, more specific than any local=/lan/); trust envs/<env>/ca.crt on the controller and on tailnet test devices.
 8. VolSync: first a ~10-minute backup-and-restore test to the backup path, run right after Traefik in step 6, and if it fails, one restic CronJob instead, no further searching (OQ7); then the rest-server, then the etcd-snapshot copy, then Kyverno and its backup policy, with the env’s retention; the restore commands come with the P0b restore drill.
 9. P0b checks (make verify PHASE=p0b); P0 exit.
 

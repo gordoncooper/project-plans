@@ -30,8 +30,7 @@ One list, from §8. Each action names the task that waits on it.
 - P0: after the P0b exit and before real data, rotate env-01’s restic credentials along with that age key (owner runs, D17); before any env holds real data, confirm both offline age-key copies and test one by decrypting a secret (§8 custody). Task: p0b-12.
 - Deferred, not a P0b exit requirement: run the coding-agent worker as its own OS user on the bastion, with no SSH keys to nodes, no kubeconfig, no age key or sops config and no access to other users’ homes; it reads and writes only its own repo checkout and pushes through its GitHub token. Until then .cursor/cli.json is the coding agents’ only guard, and live checks stay the operator’s (§2). Trigger: before coding runs that are unattended or take untrusted input (framework §9). Task: none.
 - P0: for each node that has a data disk, record its by-id path as the node’s data_disk in inventory/hosts.yml, and give the run-time wipe confirmation (D42). env-01 has none. Task: p0a-11b.
-- P0: once App DNS and the CA exist, set router forwarding of alpha.lan. Task: p0b-08.
-- P0: trust the root cert on each device. Task: p0b-08.
+- P0: once App DNS and the CA exist, set router forwarding of the env’s DNS suffix and trust envs/<env>/ca.crt on the controller and tailnet test devices (framework §8 step 7). Task: p0b-08.
 - P1: create the send-only alerts bot with BotFather. Task: p1-09.
 - P1: send it /start once and record his chat ID. Task: p1-09.
 - P2: create concierge’s Telegram token. Task: p2-15.
@@ -404,9 +403,9 @@ Goal:        Deploy the test app and its Ingress, and prove HTTPS from the LAN.
 Why:         P0b’s reachability check needs one named HTTPS service on the internal CA (R28).
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-04, p0b-05, p0b-06, p0b-07
-Touches:     platform/testapp/
-Hard limits: R5; R28. D12. Hostname testapp.alpha.lan. The app is a platform fixture, not an app-<name> hosted app (that isolation is P4a, R30).
-Done checks: Gordon sets router forwarding of alpha.lan and trusts the root cert on the controller before the LAN curl. curl from the LAN to https://testapp.alpha.lan returns the known file and the cert chains to the internal CA. The tailnet half is an owner checklist item (D17). One PR.
+Touches:     platform/testapp/, renovate.json
+Hard limits: R5; R28. D12. Hostname testapp.alpha.lan. The app is a platform fixture, not an app-<name> hosted app (that isolation is P4a, R30). It is the platform canary: the P0b check, Gatus, the P1 log proof and the P1 alert drill use it. It never depends on services or apps, and nothing depends on it. It stays on the platform-configs Flux stage, which has no wait or healthChecks, so a crashloop blocks nothing; only a failed apply would. Pod seccomp RuntimeDefault; read-only root filesystem with only /tmp writable. Renovate tracks the image with a custom regex manager scoped to platform/testapp/ (the kubernetes manager has no default file patterns).
+Done checks: Gordon does the router forwarding and root-cert trust (framework §8 step 7) before the LAN curl. curl from the LAN to https://testapp.alpha.lan returns the known file and the cert chains to the internal CA. The tailnet half is an owner checklist item (D17). One PR.
 ```
 
 ```text
