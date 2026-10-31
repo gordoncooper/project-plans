@@ -2,7 +2,7 @@
 
 Defaults chosen where `framework.md` is silent. Merging this file accepts all defaults except those marked Confirmed by Gordon.
 
-Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. Confirmed by Gordon 2026-10-20: D3, D42, D43, D44, D45, D46. Confirmed by Gordon 2026-10-28: D47. The other entries are accepted-with-plan defaults.
+Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. Confirmed by Gordon 2026-10-20: D3, D44. Confirmed by Gordon 2026-10-31: D17, D42, D43, D45, D46, D47. The other entries are accepted-with-plan defaults.
 
 These are the §11 defaults. They are recorded here. They are not copied into framework §10: this change adds only this file and `plan.md`.
 
@@ -132,10 +132,10 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D17
 
-- Decision: `make verify PHASE=<phase>` runs `tools/verify/<phase>`, a short script outside `ci/` with no tests of its own. The operator (framework §2) runs it on the controller as the agent user, with no age key, and compares live state with the repo (Example: `kubectl wait --for=condition=Ready` on Flux objects; node labels against the inventory, D42). It exits non-zero on any miss, including zero objects found, and does not re-run CI checks. It prints no reminder that counts as a pass: after its own checks it lists the owner checklist as blank lines to fill in and, when those checks pass, ends with how many owner items remain. Owner runs (the runs that need the age key: the first `site.yml` on a fresh node and an age-key swap or rotation; not `bootstrap-secrets`, which needs only the `.sops.yaml` public recipient, except the one run that recovers `envs/<env>/ca.crt` from an existing CA secret), `[G]` checks and evidence links are the owner checklist in the phase’s verify task; Gordon pastes them with the output, and his review is the gate. The flux-operator role refuses to overwrite a differing `flux-system/sops-age`, so a swap means deleting that secret by hand, re-encrypting the env’s secrets to the new recipient, and running `site.yml` with the new key file. The agent user never holds a real age key and keeps node SSH for runs that need none: any later `site.yml`, full or tagged, once `flux-system/sops-age` exists (Example: `site.yml --tags kubeconfig`). The “another ID gets none” check uses a gateway-handler fixture.
-- Reason: §2 requires attached verify output and reserves `[G]` checks and Gordon-run steps for Gordon. A script that echoes reminders proves nothing. The age key never reaches the agent user (R25, §8), and `site.yml` needs it only while `flux-system/sops-age` is absent. No second Telegram account exists.
-- Where: every phase verify task, `p0a-13`, `p0a-14`.
-- Status: accepted-with-plan default.
+- Decision: `make verify ENV=<env>` is a read-only, fail-closed check of that env’s standing state, usable by any adopter at any time. It runs `tools/verify/`, a short script outside `ci/` with no tests of its own. The operator (framework §2) runs it on the controller as the agent user, with no age key, and compares live state with the repo (Example: `kubectl wait --for=condition=Ready` on Flux objects; node labels against the inventory, D42). It exits non-zero if anything is unchecked, including zero objects found, and does not re-run CI checks or list owner items. `make drill ENV=<env>` runs the restore drill in the repo (a scratch volume, checksum before and after). Drills and evals are their own runs. Owner runs (the runs that need the age key: the first `site.yml` on a fresh node and an age-key swap or rotation; not `bootstrap-secrets`, which needs only the `.sops.yaml` public recipient, except the one run that recovers `envs/<env>/ca.crt` from an existing CA secret), `[G]` checks and evidence links stay as the phase’s owner checklist in the plan, outside the script; Gordon pastes them with the output, and his review is the gate. The flux-operator role refuses to overwrite a differing `flux-system/sops-age`, so a swap means deleting that secret by hand, re-encrypting the env’s secrets to the new recipient, and running `site.yml` with the new key file. The agent user never holds a real age key and keeps node SSH for runs that need none: any later `site.yml`, full or tagged, once `flux-system/sops-age` exists (Example: `site.yml --tags kubeconfig`). The “another ID gets none” check uses a gateway-handler fixture.
+- Reason: §2 requires attached verify output for standing state, and a separate in-repo drill for restore. A script that lists owner items or parses a transcript proves nothing. `[G]` checks and Gordon-run steps stay outside the script. The age key never reaches the agent user (R25, §8), and `site.yml` needs it only while `flux-system/sops-age` is absent. No second Telegram account exists.
+- Where: every phase verify task, `p0a-13`, `p0a-14`, `p0b-10`.
+- Status: Confirmed by Gordon 2026-10-31.
 
 ## D18
 
@@ -315,7 +315,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
     hosts:
       <host>:
         node_roles: [control_plane, workers, storage, backup]   # known: control_plane, workers, storage, backup, gpu, edge
-        data_disk: {id: /dev/disk/by-id/<stable id>, wipe_confirmed: true}   # optional; a whole disk, never /dev/nvmeXnY or -partN
+        data_disk: true   # optional; the admin mounted a disk at the data path. Omit when the node has no second disk.
 
   # infra/inventory/roles.yml/constructed.yml (core; one copy for every env)
   plugin: ansible.builtin.constructed
@@ -330,32 +330,30 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   ```
 
   - Groups: the empty prefix and separator, with `leading_separator: false`, name each group after its role (never `_<role>`), so `--limit storage` and `hosts: storage` work. `data_disk` is a constructed group of the hosts that declare one; it is not a role and gets no label. `groups.yml` keeps it as an empty group when no host declares one, so its play matches nothing without a warning.
-  - Schema: `node_roles` (not Ansible’s reserved `roles`) from the known set; exactly one `control_plane` host and one `backup` host, and at least one `edge` host; `data_disk` exactly `{id, wipe_confirmed}`; no other host keys (no IPs, R25).
+  - Schema: `node_roles` (not Ansible’s reserved `roles`) from the known set; exactly one `control_plane` host and one `backup` host, and at least one `edge` host; `data_disk` is the plain flag `true` or absent, with no id and no wipe confirmation; no other host keys (no IPs, R25).
   - Secrets: inventory and group_vars never need the age key. Secrets live only in SOPS files that bootstrap-secrets writes and Flux decrypts, never loaded through the community.sops vars plugin, so later `site.yml` runs work without the key (D17).
   - Plays: base-os on `all`, node-disk on `data_disk`, the k3s server on `control_plane`, the k3s agent on `all:!control_plane`, then kubeconfig and flux-operator on `control_plane`; `node-name` comes from `inventory_hostname`.
   - Join: every host that is not `control_plane` joins as a k3s agent; `workers`, `storage`, `backup`, `gpu` and `edge` are scheduling labels only, and the `control_plane` host runs the server only. An agent’s config sets `server: https://<control_plane inventory_hostname>:6443`, its own `node-name` and the token, with no `cluster-init` or `node-label`. The token is the server’s node-token, read by a `slurp` delegated to `control_plane` under `no_log`, so `--limit` runs still work; it is never in Git, the inventory, cluster-vars or SOPS (D17, R25).
   - Labels: `role.<dns_suffix>/<role>=true` for each role; the prefix is reserved for them. A task on `control_plane` sets them with kubernetes.core on every run and removes prefixed labels for dropped roles. No k3s `node-label`, which applies only at registration.
   - Edge: 80/443 (Traefik) and 53 (App DNS) land on the `edge` nodes. Every env must give `edge` to at least one node; there is no fallback to `control_plane`, and the schema rejects an env with no `edge` host. The same task reconciles servicelb’s `svccontroller.k3s.cattle.io/enablelb=true` label onto exactly that set on every run.
-  - Asserts: roles are declared, never detected. Before any change, a `gpu` host must have an NVIDIA device. On a host with `data_disk`, node-disk mounts `/var/lib/jarvis` by `LABEL=jarvis-data` before k3s runs; a failed mount stops the run.
-  - Disk: the data disk mounts at `/var/lib/jarvis` by `LABEL=jarvis-data` with `nofail`; k3s and images stay on root. Default layout: `local-path/`, `backup/etcd-snapshots/` (k3s writes it; a CronJob copies it into the rest-server), and `backup/restic/`, the rest-server’s data directory, with one restic repository per PVC at `ns-<namespace>/pvc-<pvc>` and no repo PV (D47). Same-disk backups cover mistakes and rollback, not disk loss (R31).
-  - Boot safety: node-disk adds a `k3s.service` drop-in with `RequiresMountsFor=` the configured `local_path_data` and `backup_path` (D3), so k3s never starts without the disk.
-  - Wipe safety (node-disk, before k3s first starts): refuse the disk that holds `/`. A disk that already carries `jarvis-data` is mounted, never formatted. Any other disk is formatted only with both `wipe_confirmed: true` and the run-time `-e jarvis_wipe_confirm=<node>:<disk id>[,<node>:<disk id>...]`, in which each host must find its own exact pair; `wipe_confirmed: true` alone never permits it. Other cases (a disk mounted elsewhere, a second labelled disk, a non-empty mount point, LVM or btrfs root) are listed in the Ansible README as not checked and rely on the two confirmations.
-  - The by-id path holds the disk serial; that is accepted as low risk in a public repo.
+  - Asserts: roles are declared, never detected. Before any change, the first play asserts amd64 hosts (D46) and a `gpu` host must have an NVIDIA device. On a host with `data_disk: true`, Ansible checks that the data path exists, is a real mount, and is empty or already holds Jarvis data, and refuses otherwise. It does not format, wipe, label or mount the disk.
+  - Disk: the hardware admin prepares and mounts any data disk at `/var/lib/jarvis`. `data_disk: true` means that mount is in place; a node with no second disk leaves `data_disk` out. Example admin commands live in `docs/deploy.md`. Ansible checks that the data path exists, is a real mount when a data disk is declared, and is empty or already holds Jarvis data, and refuses otherwise. k3s and images stay on root. The k3s role creates `local_path_data`, `backup_path` and `etcd-snapshots` under the data path at 0700; node-disk does not. Layout under the data path: `local-path/`, `backup/etcd-snapshots/` (k3s writes the snapshots; a CronJob copies them into the rest-server), and `backup/restic/`, the rest-server’s data directory, with one restic repository per PVC at `ns-<namespace>/pvc-<pvc>` and no repo PV (D47). Same-disk backups cover mistakes and rollback, not disk loss (R31).
+  - Boot safety: the k3s role adds a `k3s.service` drop-in with `RequiresMountsFor=` the configured `local_path_data` and `backup_path` (D3), so k3s waits for the mount. On a server/agent switch the k3s role disables the opposite k3s unit.
   - env-01: bench.lan has `control_plane`, `workers`, `storage`, `backup` and `edge`. It has no `data_disk` and keeps its data on lv-data on the OS disk.
-- Reason: one block reads as the whole node, and the constructed config gives plays real groups without a second list. Fact asserts catch a wrong inventory without guessing roles. A label mount survives device renames. Two keys stop a stale flag or a copied env from wiping a disk.
+- Reason: one block reads as the whole node, and the constructed config gives plays real groups without a second list. Fact asserts catch a wrong inventory without guessing roles. The hardware admin owns the disk; Ansible only refuses a data path that is missing, not a real mount, or neither empty nor already Jarvis data.
 - Where: `p0a-11a`, `p0a-11b`, `p0a-12`, `p0a-13`, `p0a-14`, `p0a-18`, `p0b-03`, `p0b-05`; framework §5 and §6.
-- Status: Confirmed by Gordon 2026-10-20.
+- Status: Confirmed by Gordon 2026-10-31.
 
 ## D43
 
 - Decision: `envs/env-00` is a never-deployed example env, a pretend 7-node cluster, and the one complete fixture for the env schema, the inventory and the Ansible roles.
-  - Hosts on `env-00.example`: `cp-1` (`control_plane`), `wk-1` to `wk-4` (`workers`; `wk-2` and `wk-3` also `gpu`, `wk-1` also `edge`), `st-1` (`storage`) and `bk-1` (`backup`). Every host but `wk-4` has a made-up `data_disk`, with `wipe_confirmed` true on some and false on others; `wk-4` keeps its data on root.
+  - Hosts on `env-00.example`: `cp-1` (`control_plane`), `wk-1` to `wk-4` (`workers`; `wk-2` and `wk-3` also `gpu`, `wk-1` also `edge`), `st-1` (`storage`) and `bk-1` (`backup`). Every host but `wk-4` sets `data_disk: true`; `wk-4` leaves `data_disk` out and keeps its data on root.
   - Values set every schema key with example values (Example: `dns_suffix: env-00.example`, repo URLs under `example-owner`). Nothing is copied from a real env.
   - No `secrets/`, SOPS files or `flux/`.
   - CI validates it like any env, fails when the schema allows a key env-00 does not set, and runs `ansible-inventory --graph` and `--syntax-check` against it.
 - Reason: Jarvis is a product, so core is proven against a multi-node env, not only the one-node env-01.
 - Where: `p0a-05a`, `p0a-11`, `p0a-11a`; framework §5 and §6.
-- Status: Confirmed by Gordon 2026-10-20.
+- Status: Confirmed by Gordon 2026-10-31.
 
 ## D44
 
@@ -373,16 +371,18 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D45
 
 - Decision: how env settings are defined and reach the cluster.
-  - `apps_git_repo_url`: required and https, validated like `flux_git_repo_url`. It names the apps repo for app hosting and the code-factory. The owner handle in both URLs must match across all non-example envs, so a repo has one owner.
-  - `llm_provider_host`: the AI provider’s API host, read by Hermes and the Gatus provider probe; the p2-18 drill overrides it.
+  - `apps_git_repo_url`: optional until the step that adds its consumer (`p4a-02`, `p4b-09a`, `p4b-09b`), and that step adds its validation. When set, it is https, validated like `flux_git_repo_url`. It names the apps repo for app hosting and the code-factory. The owner handle in both URLs must match across all non-example envs, so a repo has one owner.
+  - `llm_provider_host`: optional until `p2-18`, which adds its validation. The AI provider’s API host, read by Hermes and the Gatus provider probe; the p2-18 drill overrides it.
+  - `build_agent`, `code_delivery` and `hermes.*`: optional until the step that adds their consumer, and that step adds their validation. `build_agent`’s consumer is the p4b adapter (`p4b-04`); when set, the only accepted value is `cursor`. `code_delivery` stays optional until a consumer reads it; when set, the only accepted value is `github`. `hermes.*` validation lands with the P2 hermes steps that consume those keys (`p2-07`, `p2-13`).
+  - The rendered cluster-vars ConfigMap publishes an allow-list of cluster keys. Host-only keys stay in Ansible and are not published.
   - Flux variables are the lowercase cluster-vars keys (`${dns_suffix}`), and lists are JSON strings. The FluxInstance turns on kustomize-controller’s `StrictPostBuildSubstitutions`, so a missing variable fails instead of going empty. A literal `${...}` that is not a cluster var (shell in ConfigMaps, dashboards, Gatus templates) is written `$${...}`.
   - `.sops.yaml` has one age creation rule per env, keyed on `envs/<env>/secrets/`.
   - `age_key_file`: optional, the age private key path on the controller, default `~/.config/sops/age/keys.txt` under the running user’s HOME, never in the repo; `SOPS_AGE_KEY_FILE` overrides it. Each env uses its own key file, and `prep-node`, `bootstrap-secrets` and `site.yml` use the same one. `prep-node` warns when an existing key does not match the env’s `.sops.yaml` recipient.
-  - Tools that act on one env (bootstrap-secrets, seal, the cluster-vars render) require `ENV=` or `--env` and fail without it. The stale-render test in `ci/tests/test_flux_entry.py` skips envs with no `flux/`. `tools/prep-node` re-renders `envs/<env>/flux/generated/cluster-vars-configmap.yaml` after it edits cluster-vars.
+  - Tools that act on one env (bootstrap-secrets, seal, the cluster-vars render, verify, drill, restore, restore-all) require `ENV=` or `--env` and fail without it. The stale-render test in `ci/tests/test_flux_entry.py` skips envs with no `flux/`. `tools/prep-node` re-renders `envs/<env>/flux/generated/cluster-vars-configmap.yaml` after it edits cluster-vars.
   - The env schema CONTRACT.md has sections for node roles and labels (D42), identity values and product rules (D44), env-00 as the every-key reference, where a new key is set in env-00 in the same PR (D43), and cluster-vars to postBuild (this entry).
-- Reason: one source per value, loud failures instead of empty ones, and no tool that guesses the env.
-- Where: `p0a-03`, `p0a-04`, `p0a-05`, `p0a-05a`, `p0a-11a`, `p0a-14`, `p2-18`, `p4a-02`, `p4b-09a`, `p4b-09b`; framework R4, §5 and §6.
-- Status: Confirmed by Gordon 2026-10-20.
+- Reason: one source per value, loud failures instead of empty ones, and no tool that guesses the env. Keys with no consumer yet stay optional, and the cluster-vars ConfigMap publishes only an allow-list of cluster keys.
+- Where: `p0a-03`, `p0a-04`, `p0a-05`, `p0a-05a`, `p0a-11a`, `p0a-14`, `p2-07`, `p2-13`, `p2-18`, `p4a-02`, `p4b-04`, `p4b-09a`, `p4b-09b`; framework R3, R4, §5 and §6.
+- Status: Confirmed by Gordon 2026-10-31.
 
 ## D46
 
@@ -390,22 +390,22 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - The etcd snapshot schedule and retention (D6) and journald SystemMaxUse 2G (§7) live in role `vars/`. Role `defaults/` hold nothing that looks like env config; only the env schema holds defaults.
   - Ingress is always the bundled Traefik class; there is no `ingress_class` setting (D32).
   - Blocked egress always includes 100.64.0.0/10 (D39).
-  - The k3s role asserts amd64 hosts.
+  - The first play asserts amd64 hosts, before any change.
   - Added only when an env needs one: monitoring retention, `ssh_port`, a registry mirror (§9).
 - Reason: a setting no env changes is a constant; making it look configurable invites drift.
 - Where: `p0a-11`, `p0a-12`, `p0b-03`, the D39 egress tasks; framework §11.
-- Status: Confirmed by Gordon 2026-10-20.
+- Status: Confirmed by Gordon 2026-10-31.
 
 ## D47
 
 - Decision: backups enroll themselves, and restore is one command.
   - Enrollment: a Kyverno ClusterPolicy (classic, `failurePolicy: Ignore`, `generateExisting`, `synchronize`) generates each PVC’s restic Secret and VolSync ReplicationSource (`copyMethod: Direct`) in the PVC’s namespace, and sets `volsync.backube/privileged-movers` on that namespace. It skips PVCs annotated `backup: none` and VolSync’s own claims (`app.kubernetes.io/created-by: volsync`). No ReplicationSource is written in Git; the CI check guards the policy and the opt-out allow-list.
   - Storage: one restic rest-server in `platform-backups`, pinned to the backup node, serves every repository from `backup_path/restic`, one per PVC at `ns-<namespace>/pvc-<pvc>` (the prefixes keep every path segment off rest-server’s reserved names, such as `data`, `keys`, `locks`, `snapshots` and `config`), with one htpasswd user and no append-only.
-  - Restore: `make restore APP=<app>` and `make restore-all`. The app is suspended and scaled to 0, then one Direct ReplicationDestination with `trigger.manual`, `restoreAsOf` before the loss and `enableFileDeletion` fills the app’s own PVC and is deleted. `make restore` fails on a PVC with no eligible snapshot; `make restore-all` skips it.
-  - Rebuild hold: a build that finds no FluxInstance and restic repositories already on the backup path writes ConfigMap `kube-system/backup-rebuild-hold`; the policy keeps every generated ReplicationSource paused while it exists, and `make restore-all` lifts it once every listed repository has a PVC or is retired by name (`RETIRE`). Sources also keep 7 days (`retain.within: 7d`).
+  - Restore: `make restore ENV=<env> APP=<app>` and `make restore-all ENV=<env>`. The app is suspended and scaled to 0, then one Direct ReplicationDestination with `trigger.manual`, `restoreAsOf` before the loss and `enableFileDeletion` fills the app’s own PVC and is deleted. Both fail on a PVC with no eligible snapshot unless an explicit accept-empty flag names that PVC.
+  - Rebuild hold: a build that finds no FluxInstance and restic repositories already on the backup path writes ConfigMap `kube-system/backup-rebuild-hold`; the policy keeps every generated ReplicationSource paused while it exists, and `make restore-all ENV=<env>` lifts it only after real success. Sources also keep 7 days (`retain.within: 7d`).
   - No volume populator and no PVC `dataSourceRef` while volumes are local-path.
   - etcd: a CronJob on the server node backs up `backup_path/etcd-snapshots` into one host-scope repository (`host-etcd-snapshots`), with the same credentials and retention, after each k3s snapshot in `time_zone`. Restore is owner-run: restic restore to the node, then k3s’s cluster reset from that file.
   - Running volumes are backed up nightly as a file-by-file copy, not a snapshot, so a database quiesces or dumps first (Hermes: `p2-09`, `p2-20`).
-- Reason: a new app is backed up just by having a PVC, with no per-app manifests to forget. One server removes the per-volume repo PV and PVC, its CI exception and most of the NFS rework (§9: only the server’s volume changes). The populator needs snapshot-based restores, which local-path cannot provide; its PVC stays Pending and cannot be fixed without deleting it. After a rebuild the new source backs up the fresh, empty app at once, so restoring the latest snapshot would restore the empty app; `restoreAsOf` skips that backup and `enableFileDeletion` clears the fresh files. Those empty backups would also push the good snapshots out of retention, so a rebuild holds every backup until `make restore-all` is done; keep-within counts from the newest snapshot, so it only delays that loss. Backup objects and repository URLs come from the one policy, and CI rejects them hand-written under `services/` or `apps/`, so a service never carries its own copy that drifts. A fail-open webhook never blocks a PVC, and the background scan backfills one missed during an outage. Velero with Kopia or K8up would replace VolSync, a larger change for one node. Kyverno 1.19 is tested upstream only to Kubernetes 1.35 and builds against 1.36, so its gate is admission Ready. The etcd snapshots are the cluster’s state, so they get the same retention, dedup and future NFS and off-site path as the volumes; while the rest-server’s data sits on the same disk, that is not disk-failure protection.
+- Reason: a new app is backed up just by having a PVC, with no per-app manifests to forget. One server removes the per-volume repo PV and PVC, its CI exception and most of the NFS rework (§9: only the server’s volume changes). The populator needs snapshot-based restores, which local-path cannot provide; its PVC stays Pending and cannot be fixed without deleting it. After a rebuild the new source backs up the fresh, empty app at once, so restoring the latest snapshot would restore the empty app; `restoreAsOf` skips that backup and `enableFileDeletion` clears the fresh files. Those empty backups would also push the good snapshots out of retention, so a rebuild holds every backup until `make restore-all` succeeds; keep-within counts from the newest snapshot, so it only delays that loss. Backup objects and repository URLs come from the one policy, and CI rejects them hand-written under `services/` or `apps/`, so a service never carries its own copy that drifts. A fail-open webhook never blocks a PVC, and the background scan backfills one missed during an outage. Velero with Kopia or K8up would replace VolSync, a larger change for one node. Kyverno 1.19 is tested upstream only to Kubernetes 1.35 and builds against 1.36, so its gate is admission Ready. The etcd snapshots are the cluster’s state, so they get the same retention, dedup and future NFS and off-site path as the volumes; while the rest-server’s data sits on the same disk, that is not disk-failure protection.
 - Where: `p0b-02`, `p0b-09a`, `p0b-09b`, `p0b-09c`, `p0b-10`, `p2-09`, `p2-20`, `p2-21`; framework R31, §4, §5, §6, §8.
-- Status: Confirmed by Gordon 2026-10-28.
+- Status: Confirmed by Gordon 2026-10-31.
