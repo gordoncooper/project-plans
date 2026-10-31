@@ -247,9 +247,9 @@ Why:         Git has to drive a blank node, with platform before configs before 
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Advances:    P0a exit check: “A SOPS-encrypted secret decrypts in-cluster.”
 Depends on:  p0a-13, p0a-02, p0a-08
-Touches:     envs/env-01/flux/, platform/flux-operator/, platform/backups/ namespace only, tools/lib/render_cluster_vars_configmap.py, the stale-render test in ci/tests/test_flux_entry.py
-Hard limits: R1; R4; R25; R34. D9; D10; D11; D45 (lowercase variables, JSON lists, strict substitution, $${...} escapes, explicit env). Resources that use their own ${…} syntax set substitute: disabled. One script renders the cluster-vars ConfigMap from an allow-list of cluster keys in values/cluster-vars.yaml; host-only keys stay in Ansible and are not published, and tools/prep-node re-runs the render after editing cluster-vars. This PR adds the cluster-vars to postBuild section to the env schema CONTRACT.md.
-Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. Gordon’s first site.yml on the fresh node (an owner run, D17), after tools/prep-node and make bootstrap-secrets, passes the D42 asserts; runs no node-disk, since env-01 has no data_disk and keeps its data on lv-data on the OS disk (D42); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. A second site.yml and a second bootstrap-secrets, run by Gordon or the agent user (D17), change nothing. One PR.
+Touches:     envs/env-01/flux/, platform/flux-operator/, platform/backups/ namespace only, tools/lib/render_cluster_vars_configmap.py, the stale-render test in ci/tests/test_flux_entry.py, ci/checks/flux-substitute
+Hard limits: R1; R4; R25; R34. D9; D10; D11; D45 (lowercase variables, JSON lists, strict substitution, $${} escapes, explicit env). Resources that use their own ${…} syntax set substitute: disabled. Every ${var} a Flux Kustomization substitutes is a key in that env’s cluster-vars; $${} is a literal escape. One script renders the cluster-vars ConfigMap from an allow-list of cluster keys in values/cluster-vars.yaml; host-only keys stay in Ansible and are not published, and tools/prep-node re-runs the render after editing cluster-vars. This PR adds the cluster-vars to postBuild section to the env schema CONTRACT.md.
+Done checks: CI runs kustomize build and a schema check on every path the Flux Kustomizations name. A seeded stale cluster-vars render fails ci. A seeded ${var} a Flux Kustomization substitutes that is not a key in that env’s cluster-vars fails ci, and a $${} escape passes. Gordon’s first site.yml on the fresh node (an owner run, D17), after tools/prep-node and make bootstrap-secrets, passes the D42 asserts; runs no node-disk, since env-01 has no data_disk and keeps its data on lv-data on the OS disk (D42); and leaves each node with exactly its role labels and the enablelb label on exactly the edge set. After it, every Flux object reports Ready and the restic Secret exists in platform-backups, its value unprinted. A second site.yml and a second bootstrap-secrets, run by Gordon or the agent user (D17), change nothing. One PR.
 ```
 
 ```text
@@ -393,8 +393,8 @@ Why:         Images are pinned by digest so Renovate is the upgrade path (R33).
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-06
 Touches:     ci/checks/digest-pin
-Hard limits: R33. The k3s host binary stays a cluster-vars pin (D5), not an image digest. Images k3s bundles (Traefik, cluster CoreDNS) are pinned by k3s_version and are out of scope; the check covers images the repo adds.
-Done checks: A seeded image: tag with no digest fails ci. cert-manager and App DNS images are digest-pinned. Ships in the p0b-06 PR.
+Hard limits: R33. The k3s host binary stays a cluster-vars pin (D5), not an image digest. The digest-pin check scans images the repo writes, including HelmChartConfig valuesContent. Images k3s bundles that the repo does not write stay pinned by k3s_version.
+Done checks: A seeded image: tag with no digest fails ci, including one in HelmChartConfig valuesContent. cert-manager and App DNS images are digest-pinned. Ships in the p0b-06 PR.
 ```
 
 ```text
