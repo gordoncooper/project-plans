@@ -261,13 +261,13 @@ Done checks: CI runs kustomize build and a schema check on every path the Flux K
 
 ```text
 ID:          p0a-15
-Goal:        Add Renovate on jarvis and jarvis-apps, opening minor and patch PRs after a 3-day hold, with auto-merge off until the P2 exit.
+Goal:        Add Renovate on jarvis and jarvis-apps, opening minor and patch PRs after a 3-day release-age wait; auto-merge stays off.
 Why:         P0a is done only after Renovate has opened a PR (R33).
 Advances:    P0a exit check: “Renovate is installed and has opened at least one PR (its onboarding PR counts).”
 Depends on:  p0a-14
 Touches:     renovate.json in both repos
-Hard limits: R33. D5; D11. Auto-merge is off for every update until p2-25 turns it on for minor and patch. Majors and Hermes digests never auto-merge (p2-20). The image digest check lands with the first third-party image (p0b-07). Gordon installs the hosted Renovate GitHub App; no local Renovate tooling.
-Done checks: Renovate has opened its onboarding PR or a dependency PR. The config shows the 3-day hold, auto-merge off, and the k3s exclusion. One PR.
+Hard limits: R33. D5; D11; D61. Auto-merge stays off; the owner merges every PR. Majors and Hermes digests are human-reviewed (p2-20). The image digest check lands with the first third-party image (p0b-07). Gordon installs the hosted Renovate GitHub App; no local Renovate tooling.
+Done checks: Renovate has opened its onboarding PR or a dependency PR. The config shows the 3-day release-age wait, automerge false, and the k3s exclusion. One PR.
 ```
 
 ```text
@@ -433,7 +433,7 @@ Why:         One server owns the backup path, so a new volume needs no storage o
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no job holds every namespace’s password (R31, D48, D51).”
 Depends on:  p0b-09
 Touches:     platform/backups/rest-server.yaml, platform/backups/controller (VolSync TZ), platform/backups/CONTRACT.md, schema/CONTRACT.md, tools/bootstrap-secrets
-Hard limits: R5; R9; R25; R31. D3; D15; D42; D47; D51. One Deployment and one ClusterIP Service named restic on port 8000 in platform-backups, no Ingress, pinned to role.${dns_suffix}/backup=true, storing in backup_path/restic. Each repository is rest:http://restic.platform-backups.svc.cluster.local:8000/ns-<namespace>/pvc-<pvc> (on disk backup_path/restic/ns-<namespace>/pvc-<pvc>): the slash keeps two names from colliding, and the prefixes keep every segment off rest-server’s reserved names (data, keys, locks, snapshots, config). Per-namespace credentials land in p0b-09d; this step does not share one rest-server login across namespaces. No per-volume repo PV or PVC. The VolSync pod’s TZ is time_zone (D15). platform-backups drops privileged-movers once no mover there mounts a hostPath. etcd snapshots stay in backup_path/etcd-snapshots.
+Hard limits: R5; R9; R25; R31. D3; D15; D42; D47; D51. One Deployment and one ClusterIP Service named restic on port 8000 in platform-backups, no Ingress, pinned to role.jarvis/backup=true, storing in backup_path/restic. Each repository is rest:http://restic.platform-backups.svc.cluster.local:8000/ns-<namespace>/pvc-<pvc> (on disk backup_path/restic/ns-<namespace>/pvc-<pvc>): the slash keeps two names from colliding, and the prefixes keep every segment off rest-server’s reserved names (data, keys, locks, snapshots, config). Per-namespace credentials land in p0b-09d; this step does not share one rest-server login across namespaces. No per-volume repo PV or PVC. The VolSync pod’s TZ is time_zone (D15). platform-backups drops privileged-movers once no mover there mounts a hostPath. etcd snapshots stay in backup_path/etcd-snapshots.
 Done checks: The rest-server is Ready on the backup node. A scratch volume, applied through Flux like the p0b-09 test and removed afterward, backs up through it and restores into an empty PVC with a matching checksum; the log is in the PR. One PR.
 ```
 
@@ -451,11 +451,11 @@ Done checks: A scratch PVC in a second namespace cannot open the first namespace
 ```text
 ID:          p0b-09b
 Goal:        Copy the k3s etcd snapshots into their own restic repository on the rest-server.
-Why:         The etcd snapshots hold the cluster’s state; a restic copy adds retention, dedup and the same later path to NFS and off-site copies as the volumes (R31, D47).
+Why:         The etcd snapshots hold the cluster’s state; a restic copy adds retention, dedup and the same later NFS path and off-host copy as the volumes (R31, D47, D48, p0b-09e).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no job holds every namespace’s password (R31, D48, D51).”
 Depends on:  p0b-09d, p0a-12
 Touches:     platform/backups/etcd-snapshots.yaml, platform/backups/CONTRACT.md
-Hard limits: R5; R9; R31; R33. D6; D15; D17; D42; D47. k3s keeps writing its snapshots to backup_path/etcd-snapshots; the k3s config does not change. One CronJob in platform-backups, pinned to role.${dns_suffix}/control_plane=true where the snapshots are written, mounts that directory read-only and runs restic backup into a host-scope repository, initializing it if missing. The repository is host-etcd-snapshots, one segment that is not a rest-server reserved name. It uses the host-scope credential (D51) and the cluster-vars retention (forget and prune on each run; the repository is small). Its timeZone is time_zone, and it runs shortly after each k3s snapshot (D6), one run at a time. Restore is owner-run (D17) and written in the backups CONTRACT.md: restic restore of the chosen snapshot file onto the server node, then k3s’s cluster reset with --cluster-reset-restore-path. While the rest-server’s data sits on the same disk, this adds retention and dedup, not disk-failure protection.
+Hard limits: R5; R9; R31; R33. D6; D15; D17; D42; D47. k3s keeps writing its snapshots to backup_path/etcd-snapshots; the k3s config does not change. One CronJob in platform-backups, pinned to role.jarvis/control_plane=true where the snapshots are written, mounts that directory read-only and runs restic backup into a host-scope repository, initializing it if missing. The repository is host-etcd-snapshots, one segment that is not a rest-server reserved name. It uses the host-scope credential (D51) and the cluster-vars retention (forget and prune on each run; the repository is small). Its timeZone is time_zone, and it runs shortly after each k3s snapshot (D6), one run at a time. Restore is owner-run (D17) and written in the backups CONTRACT.md: restic restore of the chosen snapshot file onto the server node, then k3s’s cluster reset with --cluster-reset-restore-path. While the rest-server’s data sits on the same disk, this adds retention and dedup, not disk-failure protection; the off-host copy is that path (D48, p0b-09e).
 Done checks: A Job created from the CronJob completes, and restic lists a snapshot in that repository holding the newest k3s snapshot file. One PR.
 ```
 
@@ -523,7 +523,7 @@ Advances:    P0b exit check: “Restore drill: a deleted volume is restored by m
 Depends on:  p0b-12
 Touches:     infra/ansible/roles/flux-operator, the env-01 instance repo, Flux GitRepository verify
 Hard limits: R1; R25; R34. D49; D56; D57; D60. The whole gate (both sources, mode Tag, trusting only Gordon’s keys) lands in this step. Coding agents never create or push tags. env-01 is rebuilt fresh from the instance repo, not migrated in place. Sealing its old k3s token, rotating its CA into name constraints and live-migrating its backup credentials are moot for env-01, but each runbook is still rehearsed once. bench is test-only; its data disk holds only test data and is never wiped without the owner’s explicit say-so. After this step, later-phase instance writes (p2-07, p2-10, P4a apps.yaml) go to the instance repo.
-Done checks: Flux verifies both GitRepositories. A commit on main without a signed tag does not deploy. env-01 is Ready from the instance repo after the rebuild. The three runbooks have been rehearsed once. One PR, plus the owner’s first signed tags.
+Done checks: Flux verifies both GitRepositories. A commit on main without a signed tag does not deploy. env-01 is Ready from the instance repo after the rebuild; that rebuild is the dead-node rehearsal (owner’s go, data disk untouched, D49). The three runbooks have been rehearsed once. One PR, plus the owner’s first signed tags.
 ```
 
 ### Exit checks
@@ -764,7 +764,7 @@ Done checks: A unit test shows a runtime edit is replaced by the Git copy. One P
 ID:          p2-07
 Goal:        Re-add hermes.yaml in the instance repo, add the render script, extend the stale-render test in ci/tests/test_flux_entry.py to it, and seed a stale render.
 Why:         Hermes is the consumer that re-adds hermes.yaml (D54). One checked-in script renders profiles, and a hand-edited rendered/ must fail (R4).
-Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
+Advances:    P2 exit check: “admin-gate is the PR-risk check (R36); branch protection is optional and is not the deploy gate (D56): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Advances:    P0a exit check: “One required check on main, ci, runs every ci/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, a missing flux_git_repo_url, a deny list missing a whole deny class).”
 Depends on:  p2-06b, p0a-05, p0b-13
 Touches:     tools/render-profiles, the env-01 instance repo (values/hermes.yaml, rendered/), the stale-render test in ci/tests/test_flux_entry.py (adds the Hermes render)
@@ -954,11 +954,11 @@ Done checks: Three seeded PRs fail ci, and the live ops dashboard manifest has a
 ID:          p2-24
 Goal:        Add admin-gate, seed the protected-path and label-actor PRs, and have Gordon turn the check on if using branch protection.
 Why:         admin-gate stays the PR-risk check on the product repo and jarvis-apps; the deploy gate is Flux signed tags (R36, D56, D61). Fix order (§11): the check is the automated PR-risk gate; the rulebook does not replace it.
-Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
+Advances:    P2 exit check: “admin-gate is the PR-risk check (R36); branch protection is optional and is not the deploy gate (D56): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Depends on:  p2-07, p2-22, p2-23
 Touches:     .github/workflows/admin-gate.yml, ci/checks/admin-gate, jarvis-apps/.github/workflows/ci.yml, docs/code-delivery/CONTRACT.md
 Hard limits: R36. D35; D38; D44; D56; D61. The repo owner merges every PR. An agent never adds admin-approved, even under the owner’s account. Paid branch protection is optional, not the deploy gate. No owner or repo is hardcoded: the approver is the repository owner from the event (github.repository_owner), and each caller passes its R36 path list. pull_request_target on opened, synchronize, reopened, labeled, unlabeled. The job reads PR metadata only and checks out no PR code: the workflow sparse-checks out only ci/checks/admin-gate at the pinned jarvis SHA and runs it on the event. A reusable workflow cannot see its own SHA (github.sha and workflow_sha are the caller’s), so that SHA is a workflow input the caller pins to the same SHA as its uses: line, never the PR head. It removes admin-approved on every new push. A Namespace removal fails closed. The jarvis-apps admin-gate job runs only on pull_request_target and calls admin-gate.yml at a pinned jarvis SHA, written literally because uses: takes no expressions; jarvis-apps is not scanned by core-names. It is its own required check when branch protection is on. p4a-05 adds the namespaced-only check to the pull_request ci job. Image publish stays in build.yml. Instance-repo paths (envs/*/secrets/, envs/*/values/apps.yaml) live in the private instance and are owner-merged.
-Done checks: Seeded PRs fail without the label, fail when gordon5417-ai adds admin-approved, fail when the fixture actor is a Bot or an App, and pass after Gordon’s own account adds the label on the latest commit. A seeded removal of a PVC or a StorageClass fails without the label (R36). Branch protection on both repos requires admin-gate as its own check, separate from ci. The jarvis-apps admin-gate job checks out no PR code. One PR.
+Done checks: Seeded PRs fail without the label, fail when gordon5417-ai adds admin-approved, fail when the fixture actor is a Bot or an App, and pass after Gordon’s own account adds the label on the latest commit. A seeded removal of a PVC or a StorageClass fails without the label (R36). If branch protection is on, admin-gate is its own check, separate from ci (D56). The jarvis-apps admin-gate job checks out no PR code. One PR.
 ```
 
 ```text
@@ -973,11 +973,11 @@ Advances:    P2 exit check: “With the primary model blocked, chat answers from
 Advances:    P2 exit check: “A test Hermes bump PR shows auto-merge is off, its deploy waited for the digest-keyed pre-upgrade backup, and the evals then ran against the deployed bot (R33).”
 Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).”
 Advances:    P2 exit check: “After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.”
-Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
+Advances:    P2 exit check: “admin-gate is the PR-risk check (R36); branch protection is optional and is not the deploy gate (D56): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Depends on:  p2-11, p2-15, p2-16, p2-17, p2-18, p2-19, p2-20, p2-21, p2-24
-Touches:     Makefile, tools/verify/, renovate.json in jarvis and jarvis-apps
-Hard limits: R33; R35; R36; R38. D17. This PR touches tools/verify/, so it waits for admin-approved. make verify reads standing state, including that admin-gate is a required check. The admin-gate seeds are seeded PRs, attached beside it, never inside the script. The [G] lines are concierge’s Telegram reply and the grok.com dashboard. Once the P2 exit passes, renovate.json in both repos turns on minor and patch auto-merge; majors and Hermes digests stay off.
-Done checks: make verify ENV=<env> exits 0 with the standing checks this phase adds (scripted prompts, dashboard login, and that admin-gate is a required check). The admin-gate seeds are seeded PRs attached beside it. Drills and evals (geo evals, memory, eval summary, degrade, bump, restore) are attached as their own runs. Owner checklist, pasted outside the script: Gordon’s Telegram [G] paste and the grok.com dashboard [G] paste. After the exit, both repos’ renovate.json show minor and patch auto-merge on. One PR, plus the renovate.json change in each repo.
+Touches:     Makefile, tools/verify/
+Hard limits: R33; R35; R36; R38. D17; D61. This PR touches tools/verify/, so it waits for admin-approved. make verify reads standing state. The admin-gate seeds are seeded PRs, attached beside it, never inside the script. The [G] lines are concierge’s Telegram reply and the grok.com dashboard. Renovate auto-merge stays off; the owner merges every PR, including minor and patch bumps.
+Done checks: make verify ENV=<env> exits 0 with the standing checks this phase adds (scripted prompts, dashboard login). The admin-gate seeds are seeded PRs attached beside it. Drills and evals (geo evals, memory, eval summary, degrade, bump, restore) are attached as their own runs. Owner checklist, pasted outside the script: Gordon’s Telegram [G] paste and the grok.com dashboard [G] paste. One PR.
 ```
 
 ### Exit checks
@@ -990,7 +990,7 @@ Done checks: make verify ENV=<env> exits 0 with the standing checks this phase a
 - A test Hermes bump PR shows auto-merge is off, its deploy waited for the digest-keyed pre-upgrade backup, and the evals then ran against the deployed bot (R33).
 - The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).
 - After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.
-- Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).
+- admin-gate is the PR-risk check (R36); branch protection is optional and is not the deploy gate (D56): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).
 
 Done = attached make verify ENV=<env> output, plus this phase’s drills and evals as their own runs
 
@@ -1377,7 +1377,7 @@ ID:          p4b-10
 Goal:        Show the lane token scopes and show the code-factory cannot write to jarvis.
 Why:         The lane holds no push credential, and the App is installed on jarvis-apps only (R42, R40).
 Advances:    P4b exit check: “Token scopes show no agent holds push credentials and the code-factory cannot write to jarvis.”
-Advances:    P2 exit check: “Branch protection requires admin-gate (R36): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
+Advances:    P2 exit check: “admin-gate is the PR-risk check (R36); branch protection is optional and is not the deploy gate (D56): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Advances:    P4b exit check: “The code-factory App adding admin-approved fails admin-gate.”
 Depends on:  p4b-06b
 Touches:     ci/checks/token-scopes, both workflows, jarvis-apps/.github/workflows/seed-app.yml
