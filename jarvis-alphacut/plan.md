@@ -261,13 +261,13 @@ Done checks: CI runs kustomize build and a schema check on every path the Flux K
 
 ```text
 ID:          p0a-15
-Goal:        Add Renovate on jarvis and jarvis-apps, opening minor and patch PRs after a 3-day release-age wait; auto-merge stays off.
+Goal:        Add Renovate on jarvis and jarvis-apps, opening update PRs right away; auto-merge stays off.
 Why:         P0a is done only after Renovate has opened a PR (R33).
 Advances:    P0a exit check: “Renovate is installed and has opened at least one PR (its onboarding PR counts).”
 Depends on:  p0a-14
 Touches:     renovate.json in both repos
-Hard limits: R33. D5; D11; D61. Auto-merge stays off; the owner merges every PR. Majors and Hermes digests are human-reviewed (p2-20). The image digest check lands with the first third-party image (p0b-07). Gordon installs the hosted Renovate GitHub App; no local Renovate tooling.
-Done checks: Renovate has opened its onboarding PR or a dependency PR. The config shows the 3-day release-age wait, automerge false, and the k3s exclusion. One PR.
+Hard limits: R33. D5; D11; D61. Auto-merge stays off; the owner merges every PR. Renovate config has no release-age or stability hold and opens update PRs right away; whether to wait a few days before merging a fresh release is a line in the operations docs, not config. Majors and Hermes digests are human-reviewed (p2-20). The image digest check lands with the first third-party image (p0b-07). Gordon installs the hosted Renovate GitHub App; no local Renovate tooling.
+Done checks: Renovate has opened its onboarding PR or a dependency PR. The config has no release-age hold, automerge is off, and the k3s exclusion is set. One PR.
 ```
 
 ```text
