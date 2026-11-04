@@ -433,8 +433,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D51
 
-- Decision: each namespace gets its own restic credentials and its own private repository on the backup server, before `p2-09`. No job ever holds every namespace’s password: per-namespace credentials land before the off-host copy, or the copy runs per namespace with only that namespace’s password.
-- Reason: one shared rest-server login is every namespace’s password in one Secret.
+- Decision: core (the `jarvis` repo, the k3s and Flux foundation, and the chat bot) is one trusted zone with a short credential list: the age key, the k3s server token (plus a separate agent token from the D2 rebuild rehearsal), one restic password and one storage login for all core backups, and the GitHub deploy key. Hosted apps from `jarvis-apps` are untrusted: each `app-<name>` namespace with data gets its own restic credential and its own private repository, before that app stores data. An app credential cannot read, write or prune any core repository, including the chat bot’s personal data, or another app’s.
+- Reason: core is trusted, so more core credentials add work without much safety; apps are the untrusted side, so their backups are kept apart from core and from each other.
 - Where: `p0b-09d`, `p0b-09e`, `p2-09`; framework R31, §5 Backups, §8.
 - Status: Confirmed by Gordon 2026-11-02.
 
@@ -517,8 +517,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D63
 
-- Decision: hosted apps are stateless by default; stateful apps are allowed, with backup enrollment, once per-namespace backup credentials exist (D51).
-- Reason: a PVC without its own restic password shares every other app’s backup secret.
+- Decision: hosted apps are stateless by default; stateful apps are allowed, with backup enrollment, once that app has its own backup credential (D51).
+- Reason: an app PVC without its own restic credential would share core’s backup secret.
 - Where: `p4a-01`, `p4a-05`, `p4a-06`; framework R30, R31.
 - Status: Confirmed by Gordon 2026-11-02.
 
