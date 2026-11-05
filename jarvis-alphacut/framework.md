@@ -430,12 +430,12 @@ jarvis/
     app-hosting/               ResourceSet template: ns, quota, netpol, SA, GitRepository, impersonated Kustomization
     testapp/                   the platform canary (D12), on the platform-configs stage
   services/                    layer 3: optional add-ons, off by default and enabled per env in the instance repo (D69); each component folder has CONTRACT.md
-    chat-bot/                  the chat-bot slot: CONTRACT.md (hosting, storage, backups, secrets, URL/ingress, and the model provider, assistant API and skill contract sections); core and other add-ons depend on this, never on Hermes by name
-    observability/             add-on: victoria-metrics, victoria-logs, fluent-bit, vmagent, grafana/{dashboards,alerts}, gatus, verify/
+    slots/chat-bot/            the chat-bot slot: CONTRACT.md (hosting, storage, backups, secrets, URL/ingress, and the model provider, assistant API and skill contract sections); core and other add-ons depend on this, never on Hermes by name
+    observability/             add-on: victoria-metrics, victoria-logs, fluent-bit, vmagent, grafana/{dashboards,alerts}, gatus, verify.py
     hermes/                    add-on: the chat-bot slot’s first implementation
       Makefile                 the add-on’s commands: render-profiles, backup (on-demand backup), google-consent; each takes ENV=
       tools/                   render-profiles, backup, google-consent (operator tools that run against an env)
-      verify/                  the Hermes verify component, run by make verify ENV= only when the env enables Hermes
+      verify.py                the Hermes verify component, run by make verify ENV= only when the env enables Hermes
       core/                    base/ (Kustomize), config/ (defaults, write_approval, toolset policy),
                                skills/ (geo/: in-repo read-only MCP server), glue/ (render lib, startup sync), schema/ (profile schema and its CONTRACT.md),
                                templates/profile/, testing/ (mock MCP, grader), CONTRACT.md (how Hermes meets the chat-bot slot)
