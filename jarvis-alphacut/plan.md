@@ -1202,8 +1202,8 @@ Why:         A hosted app has to show up in Gatus without a hand-edited Gatus fi
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-02, p1-08
 Touches:     platform/app-hosting/, services/observability/gatus/
-Hard limits: R5. The ConfigMap is labeled in the observability namespace. The sidecar is the same pattern Grafana uses for dashboards. The app file holds no health path, so the check targets the app’s host (<name>.apps.<DNS suffix>) at its root path; the app’s own probes in its deploy/ cover liveness.
-Done checks: A fixture listed app produces a Gatus check for <name>.apps.alpha.lan. One PR.
+Hard limits: R5. The ConfigMap is labeled in the observability namespace. The sidecar is the same pattern Grafana uses for dashboards. The check probes the app’s address (<name>.apps.<DNS suffix>) from outside, like a user, at the app file’s optional health path; if it is missing the path is /, and any answer except a server error (5xx) is healthy. It is always on for hosted apps on an env with the observability add-on; an app opts out only with an exception line in the env’s values/apps.yaml, like any other risky item (D70). Kubernetes probes stay the app’s own in its deploy/ manifests, separate from this check.
+Done checks: A fixture listed app produces a Gatus check for <name>.apps.alpha.lan at its health path, or / when it sets none. A fixture app with an exception line produces none. One PR.
 ```
 
 ```text
@@ -1213,7 +1213,7 @@ Why:         P4a needs one real app whose image CI publishes as a public GHCR pa
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-02
 Touches:     jarvis-apps/demo/, jarvis-apps/.github/workflows/build.yml, platform/app-hosting/CONTRACT.md
-Hard limits: R5; R10 (Python); R33 (digest). D25; D35; D70. demo/app.yaml is the app’s one app file: its name matches the folder, and it defines everything about the app, including per-env differences, in the keys of the app-hosting contract only (web port, volumes, resources, internet, talks-to and accepts-from, extra ports, risky-item asks, per-env overrides); it holds no image, source or health path. The image and the probes are the app’s own, in demo/deploy/; the /health path of D25 lives in those probes. An app with no valid app file fails closed. deploy/ holds namespaced objects only. The image is a public package; Gordon sets the package public on first publish. build.yml is no longer marked planned in the app-hosting contract.
+Hard limits: R5; R10 (Python); R33 (digest). D25; D35; D70. demo/app.yaml is the app’s one app file: its name matches the folder, and it defines everything about the app, including per-env differences, in the keys of the app-hosting contract only (web port, volumes, resources, internet, talks-to and accepts-from, extra ports, risky-item asks, per-env overrides, and the optional health path); it holds no image or source. demo/app.yaml sets the health path to /health (D25). The image and the Kubernetes probes are the app’s own, in demo/deploy/. An app with no valid app file fails closed. deploy/ holds namespaced objects only. The image is a public package; Gordon sets the package public on first publish. build.yml is no longer marked planned in the app-hosting contract.
 Done checks: build.yml publishes the image. The deploy manifests pin a digest. /health answers in a local container run. One PR.
 ```
 
@@ -1236,7 +1236,7 @@ Advances:    P4a exit check: “With app hosting on, after Gordon adds the app�
 Depends on:  p4a-05
 Touches:     jarvis-apps/AGENTS.md
 Hard limits: R30; R39. D63. The builder sees only this repo. The file says apps are stateless by default, namespaced, and free of JARVIS secrets; stateful apps need backup enrollment; each app has one app file, <name>/app.yaml, that matches its folder and asks for any risky item (the env must also grant it, D70). It does not copy the jarvis rulebook. This path is protected (R36).
-Done checks: AGENTS.md is the only rule file in the repo and names that the image and probes (the health path) are the app’s own in deploy/, and the namespace rule. One PR.
+Done checks: AGENTS.md is the only rule file in the repo and names that the image and Kubernetes probes are the app’s own in deploy/, that the app file’s optional health path (default /; any answer but 5xx is healthy) feeds the uptime check, and the namespace rule. One PR.
 ```
 
 ```text

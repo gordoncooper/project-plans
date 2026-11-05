@@ -189,7 +189,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D25
 
-- Decision: the P4a app is `jarvis-apps/demo`, own code, Python standard-library HTTP on port 8080, health path `/health`.
+- Decision: the P4a app is `jarvis-apps/demo`, own code, Python standard-library HTTP on port 8080, health path `/health`, set in its app file (D70).
 - Reason: P4a needs one outside app and names none. Own code in jarvis-apps is the smaller path.
 - Where: `p4a-04`, `p4a-07`.
 - Status: accepted-with-plan default.
@@ -580,10 +580,11 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 - Decision: how hosted apps are switched on, defined and held to their file.
   - App hosting is an optional core component, off by default. An env turns it on with one line, a kustomize `components` entry for `core/platform/app-hosting` in `envs/<env>/flux/platform-configs/kustomization.yaml`, the file where it turns on the app-only backup server (D47). With it off, the env gets none of the app pieces.
   - The env lists app names only, under `apps:` in `envs/<env>/values/apps.yaml` (for example `apps: [paperless, immich]`). A missing or empty list means no apps. A new jarvis-apps app never deploys until an env lists it; once listed it deploys automatically. The list holds no settings, and the app file holds no per-env on/off. A checked-in render script writes one trusted wiring Kustomization per listed app from that list.
-  - Each app has one app file in jarvis-apps, `<name>/app.yaml`. Its name must match the folder. It defines everything about the app, including per-env differences, so no per-app hand edit is made in core or an env repo. It holds the web port, volumes, resources, internet, talks-to and accepts-from, extra ports, risky-item asks and per-env overrides; the image and probes are the app's own, in its `deploy/` manifests. An app with no valid app file fails closed.
+  - Each app has one app file in jarvis-apps, `<name>/app.yaml`. Its name must match the folder. It defines everything about the app, including per-env differences, so no per-app hand edit is made in core or an env repo. It holds the web port, an optional health path, volumes, resources, internet, talks-to and accepts-from, extra ports, risky-item asks and per-env overrides; the image and the Kubernetes probes are the app's own, in its `deploy/` manifests. An app with no valid app file fails closed.
   - Every app is `<name>.apps.<dns_suffix>` under one wildcard certificate. An app cannot take a core or add-on name, and no add-on may be named `apps`. The app's namespace stays `app-<name>`.
   - Defaults: 512Mi, 0.5 CPU, no internet, no traffic to other apps, and extra ports stay in-cluster. An app volume may be marked not backed up.
   - Risky items (privileged mode, host access, a custom address outside `.apps`, a port open to the home network) work only with an ask in the app file and a matching exception line for that app in that env's repo, under `exceptions:` in the same `envs/<env>/values/apps.yaml`, next to the name list. The cluster enforces both, not CI or PR review. Whoever can merge in the env's repo grants exception lines; that is intended.
+  - Health checks. The app file has an optional health path. If it is missing, the check uses `/`, and any answer except a server error (5xx) counts as healthy. The demo app sets `/health`. The Jarvis uptime check probes each hosted app's `<name>.apps.<dns_suffix>` address from outside, like a user. It is always on for hosted apps and runs on envs with the observability component on. An app opts out only with an exception line in the env's `values/apps.yaml`, like any other risky item. Kubernetes probes stay the app's own, in its manifests, separate from the uptime check.
   - Credentials are unchanged (D51): one core restic credential, one per app.
 - Reason: an untrusted app should be defined by one file and held to it by the cluster, and an env should say yes to an app and to each risk in its own repo, with nothing hand-edited per app.
 - Where: `p4a-01`, `p4a-02`, `p4a-03`, `p4a-04`, `p4a-06`, `p4a-07`; framework R1, R4, R28, R30, R31, §5 App hosting, §5 Backups, §6; D45, D47, D51, D54, D63, D69.
