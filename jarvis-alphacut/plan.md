@@ -1191,7 +1191,7 @@ Why:         Fix order (§11): one name in the env’s apps list is the easy pat
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-01, p0a-05
 Touches:     platform/app-hosting/, env schema apps.yaml rules
-Hard limits: R1; R4; R30. D30 for the default size: 512Mi and 0.5 CPU, unless the app file sets its own (§7). D54; D60; D63; D70. apps.yaml is re-added in the instance repo and holds app names and exception lines only: no settings per app, and no per-env on/off in the app file. A missing or empty list means no apps. Each app’s GitRepository URL comes from apps_git_repo_url (D45). This step adds the key and its validation. No cross-namespace source refs. Flux may use an optional pull secret (D56). No pull secret for public GHCR. The env schema accepts app hosting on or off (one line, off by default). The cluster, not CI, enforces the app file: an app with no valid app file fails closed, the object matches the file, and a risky item (privileged mode, host access, a custom address outside .apps, a port open to the home network) passes only with an ask in the app file and a matching exception line in the env’s repo. An app cannot take a core or add-on name, and no add-on may be named apps. Stateful apps are allowed only with backup enrollment.
+Hard limits: R1; R4; R30. D30 for the default size: 512Mi and 0.5 CPU, unless the app file sets its own (§7). D54; D60; D63; D70. apps.yaml is re-added in the instance repo and holds app names and exception lines only: no settings per app, and no per-env on/off in the app file. A missing or empty list means no apps. Each app’s GitRepository URL comes from apps_git_repo_url (D45). This step adds the key and its validation. No cross-namespace source refs. Flux may use an optional pull secret (D56). No pull secret for public GHCR. The env schema accepts app hosting on or off: the switch is one kustomize components entry for core/platform/app-hosting in envs/<env>/flux/platform-configs/kustomization.yaml, off by default, and an env that lists apps with it off fails the schema check. A render script writes one app-<name>-wiring Kustomization per listed app into envs/<env>/flux/generated/apps.yaml. Exception lines go under exceptions: in the same apps.yaml. The cluster, not CI, enforces the app file: an app with no valid app file fails closed, the object matches the file, and a risky item (privileged mode, host access, a custom address outside .apps, a port open to the home network) passes only with an ask in the app file and a matching exception line in the env’s repo. An app cannot take a core or add-on name, and no add-on may be named apps. Stateful apps are allowed only with backup enrollment.
 Done checks: With app hosting off, or with apps.yaml empty or missing, no app namespace exists. A fixture render with one listed name produces the namespace, quota, default-deny policy, service account, GitRepository, and impersonated Kustomization. A listed name with no valid app file deploys nothing. A risky item without both the ask and the exception line is refused. One PR.
 ```
 
@@ -1202,7 +1202,7 @@ Why:         A hosted app has to show up in Gatus without a hand-edited Gatus fi
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-02, p1-08
 Touches:     platform/app-hosting/, services/observability/gatus/
-Hard limits: R5. The ConfigMap is labeled in the observability namespace. The sidecar is the same pattern Grafana uses for dashboards.
+Hard limits: R5. The ConfigMap is labeled in the observability namespace. The sidecar is the same pattern Grafana uses for dashboards. The app file holds no health path, so the check targets the app’s host (<name>.apps.<DNS suffix>) at its root path; the app’s own probes in its deploy/ cover liveness.
 Done checks: A fixture listed app produces a Gatus check for <name>.apps.alpha.lan. One PR.
 ```
 
@@ -1213,14 +1213,14 @@ Why:         P4a needs one real app whose image CI publishes as a public GHCR pa
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-02
 Touches:     jarvis-apps/demo/, jarvis-apps/.github/workflows/build.yml, platform/app-hosting/CONTRACT.md
-Hard limits: R5; R10 (Python); R33 (digest). D25; D35; D70. demo/app.yaml is the app’s one app file: its name matches the folder, and it defines everything about the app, including per-env differences (source, port, health path, size, network needs, volumes and any risky-item asks). An app with no valid app file fails closed. deploy/ holds namespaced objects only. The image is a public package; Gordon sets the package public on first publish. build.yml is no longer marked planned in the app-hosting contract.
+Hard limits: R5; R10 (Python); R33 (digest). D25; D35; D70. demo/app.yaml is the app’s one app file: its name matches the folder, and it defines everything about the app, including per-env differences, in the keys of the app-hosting contract only (web port, volumes, resources, internet, talks-to and accepts-from, extra ports, risky-item asks, per-env overrides); it holds no image, source or health path. The image and the probes are the app’s own, in demo/deploy/; the /health path of D25 lives in those probes. An app with no valid app file fails closed. deploy/ holds namespaced objects only. The image is a public package; Gordon sets the package public on first publish. build.yml is no longer marked planned in the app-hosting contract.
 Done checks: build.yml publishes the image. The deploy manifests pin a digest. /health answers in a local container run. One PR.
 ```
 
 ```text
 ID:          p4a-05
 Goal:        Reject cluster-scoped objects in jarvis-apps, allow an enrolled stateful PVC, and seed one cluster-scoped PR.
-Why:         Fix order (§11): the ResourceSet already limits what an app is; CI is the backstop (R30).
+Why:         Fix order (§11): the cluster’s admission rules already limit what an app is; CI is the backstop (R30).
 Advances:    P4a exit check: “A seeded jarvis-apps PR with a cluster-scoped object fails CI (R30).”
 Depends on:  p4a-04, p2-24
 Touches:     jarvis-apps/.github/checks/namespaced-only.sh, jarvis-apps/.github/workflows/ci.yml
@@ -1236,7 +1236,7 @@ Advances:    P4a exit check: “With app hosting on, after Gordon adds the app�
 Depends on:  p4a-05
 Touches:     jarvis-apps/AGENTS.md
 Hard limits: R30; R39. D63. The builder sees only this repo. The file says apps are stateless by default, namespaced, and free of JARVIS secrets; stateful apps need backup enrollment; each app has one app file, <name>/app.yaml, that matches its folder and asks for any risky item (the env must also grant it, D70). It does not copy the jarvis rulebook. This path is protected (R36).
-Done checks: AGENTS.md is the only rule file in the repo and names the health path and the namespace rule. One PR.
+Done checks: AGENTS.md is the only rule file in the repo and names that the image and probes (the health path) are the app’s own in deploy/, and the namespace rule. One PR.
 ```
 
 ```text

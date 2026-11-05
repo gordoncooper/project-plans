@@ -451,7 +451,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D53
 
-- Decision: services land as per-service Flux Kustomizations from a named core source. Only `flux-system` decrypts, with the env key; tenant secrets live in the instance under `envs/<env>/secrets/<namespace>/`; a tenant namespace never gets the age key. Flux runs with multi-tenancy lockdown; every Kustomization and HelmRelease names its service account; CI enforces it. A separate apps repo and the P4a ResourceSet come at P4a.
+- Decision: services land as per-service Flux Kustomizations from a named core source. Only `flux-system` decrypts, with the env key; tenant secrets live in the instance under `envs/<env>/secrets/<namespace>/`; a tenant namespace never gets the age key. Flux runs with multi-tenancy lockdown; every Kustomization and HelmRelease names its service account; CI enforces it. A separate apps repo and the P4a per-app wiring Kustomizations (rendered from the env’s app list, D70) come at P4a.
 - Reason: one decryptor; tenants cannot read each other’s secrets or apply cluster-scoped objects.
 - Where: `p0a-13`, `p0a-14`, `p0b-13`, `p2-09`; framework R1, R25, §5, §6.
 - Status: Confirmed by Gordon 2026-11-02.
@@ -578,12 +578,12 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D70
 
 - Decision: how hosted apps are switched on, defined and held to their file.
-  - App hosting is an optional core component, off by default. An env turns it on with one line in its repo, the same pattern as the app-only backup server (D47). With it off, the env gets none of the app pieces.
-  - The env lists app names only, in `envs/<env>/values/apps.yaml` (for example `apps: [paperless, immich]`). A missing or empty list means no apps. A new jarvis-apps app never deploys until an env lists it; once listed it deploys automatically. The list holds no settings, and the app file holds no per-env on/off.
-  - Each app has one app file in jarvis-apps, `<name>/app.yaml`. Its name must match the folder. It defines everything about the app, including per-env differences, so no per-app hand edit is made in core or an env repo. An app with no valid app file fails closed.
+  - App hosting is an optional core component, off by default. An env turns it on with one line, a kustomize `components` entry for `core/platform/app-hosting` in `envs/<env>/flux/platform-configs/kustomization.yaml`, the file where it turns on the app-only backup server (D47). With it off, the env gets none of the app pieces.
+  - The env lists app names only, under `apps:` in `envs/<env>/values/apps.yaml` (for example `apps: [paperless, immich]`). A missing or empty list means no apps. A new jarvis-apps app never deploys until an env lists it; once listed it deploys automatically. The list holds no settings, and the app file holds no per-env on/off. A checked-in render script writes one trusted wiring Kustomization per listed app from that list.
+  - Each app has one app file in jarvis-apps, `<name>/app.yaml`. Its name must match the folder. It defines everything about the app, including per-env differences, so no per-app hand edit is made in core or an env repo. It holds the web port, volumes, resources, internet, talks-to and accepts-from, extra ports, risky-item asks and per-env overrides; the image and probes are the app's own, in its `deploy/` manifests. An app with no valid app file fails closed.
   - Every app is `<name>.apps.<dns_suffix>` under one wildcard certificate. An app cannot take a core or add-on name, and no add-on may be named `apps`. The app's namespace stays `app-<name>`.
   - Defaults: 512Mi, 0.5 CPU, no internet, no traffic to other apps, and extra ports stay in-cluster. An app volume may be marked not backed up.
-  - Risky items (privileged mode, host access, a custom address outside `.apps`, a port open to the home network) work only with an ask in the app file and a matching exception line for that app in that env's repo. The cluster enforces both, not CI or PR review. Whoever can merge in the env's repo grants exception lines; that is intended.
+  - Risky items (privileged mode, host access, a custom address outside `.apps`, a port open to the home network) work only with an ask in the app file and a matching exception line for that app in that env's repo, under `exceptions:` in the same `envs/<env>/values/apps.yaml`, next to the name list. The cluster enforces both, not CI or PR review. Whoever can merge in the env's repo grants exception lines; that is intended.
   - Credentials are unchanged (D51): one core restic credential, one per app.
 - Reason: an untrusted app should be defined by one file and held to it by the cluster, and an env should say yes to an app and to each risk in its own repo, with nothing hand-edited per app.
 - Where: `p4a-01`, `p4a-02`, `p4a-03`, `p4a-04`, `p4a-06`, `p4a-07`; framework R1, R4, R28, R30, R31, §5 App hosting, §5 Backups, §6; D45, D47, D51, D54, D63, D69.
