@@ -2,7 +2,7 @@
 
 Defaults chosen where `framework.md` is silent. Merging this file accepts all defaults except those marked Confirmed by Gordon.
 
-Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. Confirmed by Gordon 2026-10-20: D3, D44. Confirmed by Gordon 2026-10-31: D17, D42, D43, D45, D46, D47. Confirmed by Gordon 2026-11-02: D48–D67. Confirmed by Gordon 2026-11-04: D68, D69. The other entries are accepted-with-plan defaults.
+Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. Confirmed by Gordon 2026-10-20: D3, D44. Confirmed by Gordon 2026-10-31: D17, D42, D43, D45, D46, D47. Confirmed by Gordon 2026-11-02: D48–D67. Confirmed by Gordon 2026-11-04: D68, D69. Confirmed by Gordon 2026-11-05: D70. The other entries are accepted-with-plan defaults.
 
 These are the §11 defaults. They are recorded here. They are not copied into framework §10: this change adds only this file and `plan.md`.
 
@@ -189,7 +189,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D25
 
-- Decision: the P4a app is `jarvis-apps/apps/demo`, own code, Python standard-library HTTP on port 8080, health path `/health`.
+- Decision: the P4a app is `jarvis-apps/demo`, own code, Python standard-library HTTP on port 8080, health path `/health`, set in its app file (D70).
 - Reason: P4a needs one outside app and names none. Own code in jarvis-apps is the smaller path.
 - Where: `p4a-04`, `p4a-07`.
 - Status: accepted-with-plan default.
@@ -451,16 +451,16 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D53
 
-- Decision: services land as per-service Flux Kustomizations from a named core source. Only `flux-system` decrypts, with the env key; tenant secrets live in the instance under `envs/<env>/secrets/<namespace>/`; a tenant namespace never gets the age key. Flux runs with multi-tenancy lockdown; every Kustomization and HelmRelease names its service account; CI enforces it. A separate apps repo and the P4a ResourceSet come at P4a.
+- Decision: services land as per-service Flux Kustomizations from a named core source. Only `flux-system` decrypts, with the env key; tenant secrets live in the instance under `envs/<env>/secrets/<namespace>/`; a tenant namespace never gets the age key. Flux runs with multi-tenancy lockdown; every Kustomization and HelmRelease names its service account; CI enforces it. A separate apps repo and the P4a per-app wiring Kustomizations (rendered from the env’s app list, D70) come at P4a.
 - Reason: one decryptor; tenants cannot read each other’s secrets or apply cluster-scoped objects.
 - Where: `p0a-13`, `p0a-14`, `p0b-13`, `p2-09`; framework R1, R25, §5, §6.
 - Status: Confirmed by Gordon 2026-11-02.
 
 ## D54
 
-- Decision: `hermes.yaml`, `apps.yaml`, their validators and `build_agent` are absent from the env schema until the step that adds their consumer. Hermes re-adds `hermes.yaml` at `p2-07`; apps re-add `apps.yaml` at P4a; build agents arrive as an adapter list with the code factory (`p4b-04`).
+- Decision: `hermes.yaml`, `apps.yaml`, their validators and `build_agent` are absent from the env schema until the step that adds their consumer. Hermes re-adds `hermes.yaml` at `p2-07`; apps re-add `apps.yaml` at P4a, as a list of app names and exception lines only (D70); build agents arrive as an adapter list with the code factory (`p4b-04`).
 - Reason: a key with no consumer is a required file that no step reads.
-- Where: `p0a-01`, `p0a-03`, `p0a-05`, `p2-07`, `p4a-02`, `p4b-04`; framework R3, R4, §5 Env schema.
+- Where: `p0a-01`, `p0a-03`, `p0a-05`, `p2-07`, `p4a-02`, `p4b-04`; framework R3, R4, §5 Env schema; D70.
 - Status: Confirmed by Gordon 2026-11-02.
 
 ## D55
@@ -570,7 +570,22 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - The chat bot is a slot. It sits behind a slot contract (`services/slots/chat-bot/CONTRACT.md`, D7) covering hosting, storage, backups, secrets, URL/ingress, and later the assistant API and model provider. Hermes is its first implementation. Core and other add-ons depend on the slot, never on Hermes by name, so swapping Hermes replaces one add-on with no core edits. Tools and checks that serve Hermes (profile render, on-demand backup, Google consent, the Hermes verify checks) live in the add-on’s folder, and the verify checks run only when the env enables it.
   - Observability (VictoriaMetrics, VictoriaLogs, Fluent Bit, vmagent, Grafana, Gatus, alerting) is an optional add-on, not core. A rule or step that uses it applies when the env enables it; core’s own health is `make verify`.
   - The code factory is its own add-on. Its shape is decided at P4b.
-  - `jarvis-apps` stays the untrusted zone (D51, D63, R30).
+  - `jarvis-apps` stays the untrusted zone (D51, D63, R30). App hosting is an optional core component, off by default (D70).
 - Reason: core is useful on its own as a k3s foundation, and the chat-bot runtime may be replaced later.
 - Where: `p0a-04`, `p0b-01`, `p0b-06`, the P1 phase note, `p1-13`, `p2-01`, `p2-05`, `p2-07`, `p2-09`, `p2-12`, `p2-14`, `p2-18`, `p2-19`, `p2-20`, `p2-21`, `p2-25`, `p3-00`, `p3-08`, `p4a-03`, `p4a-07`, `p4b-15`; D7, D24, D40, D51; framework R1, R3, R5, R7, R8, §1, §2, §4, §5, §6, §8.
 - Status: Confirmed by Gordon 2026-11-04.
+
+## D70
+
+- Decision: how hosted apps are switched on, defined and held to their file.
+  - App hosting is an optional core component, off by default. An env turns it on with one line, a kustomize `components` entry for `core/platform/app-hosting` in `envs/<env>/flux/platform-configs/kustomization.yaml`, the file where it turns on the app-only backup server (D47). With it off, the env gets none of the app pieces.
+  - The env lists app names only, under `apps:` in `envs/<env>/values/apps.yaml` (for example `apps: [paperless, immich]`). A missing or empty list means no apps. A new jarvis-apps app never deploys until an env lists it; once listed it deploys automatically. The list holds no settings, and the app file holds no per-env on/off. A checked-in render script writes one trusted wiring Kustomization per listed app from that list.
+  - Each app has one app file in jarvis-apps, `<name>/app.yaml`. Its name must match the folder. It defines everything about the app, including per-env differences, so no per-app hand edit is made in core or an env repo. It holds the web port, an optional health path, volumes, resources, internet, talks-to and accepts-from, extra ports, risky-item asks and per-env overrides; the image and the Kubernetes probes are the app's own, in its `deploy/` manifests. An app with no valid app file fails closed.
+  - Every app is `<name>.apps.<dns_suffix>` under one wildcard certificate. An app cannot take a core or add-on name, and no add-on may be named `apps`. The app's namespace stays `app-<name>`.
+  - Defaults: 512Mi, 0.5 CPU, no internet, no traffic to other apps, and extra ports stay in-cluster. An app volume may be marked not backed up.
+  - Risky items (privileged mode, host access, a custom address outside `.apps`, a port open to the home network) work only with an ask in the app file and a matching exception line for that app in that env's repo, under `exceptions:` in the same `envs/<env>/values/apps.yaml`, next to the name list. The cluster enforces both, not CI or PR review. Whoever can merge in the env's repo grants exception lines; that is intended.
+  - Health checks. The app file has an optional health path. If it is missing, the check uses `/`, and any answer except a server error (5xx) counts as healthy. The demo app sets `/health`. The Jarvis uptime check probes each hosted app's `<name>.apps.<dns_suffix>` address from outside, like a user. It is always on for hosted apps and runs on envs with the observability component on. An app opts out only with an exception line in the env's `values/apps.yaml`, like any other risky item. Kubernetes probes stay the app's own, in its manifests, separate from the uptime check.
+  - Credentials are unchanged (D51): one core restic credential, one per app.
+- Reason: an untrusted app should be defined by one file and held to it by the cluster, and an env should say yes to an app and to each risk in its own repo, with nothing hand-edited per app.
+- Where: `p4a-01`, `p4a-02`, `p4a-03`, `p4a-04`, `p4a-06`, `p4a-07`; framework R1, R4, R28, R30, R31, §5 App hosting, §5 Backups, §6; D45, D47, D51, D54, D63, D69.
+- Status: Confirmed by Gordon 2026-11-05.
