@@ -431,23 +431,23 @@ Done checks: A seeded PR with a PVC that has neither a backup entry nor backup: 
 
 ```text
 ID:          p0b-09a
-Goal:        Serve every restic repository from one restic rest-server, one repository per PVC.
-Why:         One server owns the backup path, so a new volume needs no storage of its own, and NFS later changes one volume (R31, D47).
+Goal:        Serve every core restic repository from one restic rest-server, one repository per PVC.
+Why:         One server owns the core backup path, so a new volume needs no storage of its own, and NFS later changes one volume (R31, D47).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no app credential opens a core repository (R31, D48, D51).”
 Depends on:  p0b-09
 Touches:     platform/backups/rest-server.yaml, platform/backups/controller (VolSync TZ), platform/backups/CONTRACT.md, schema/CONTRACT.md, tools/bootstrap-secrets
-Hard limits: R5; R9; R25; R31. D3; D15; D42; D47; D51. One Deployment and one ClusterIP Service named restic on port 8000 in platform-backups, no Ingress, pinned to role.jarvis/backup=true, storing in backup_path/restic. Each repository is rest:http://restic.platform-backups.svc.cluster.local:8000/ns-<namespace>/pvc-<pvc> (on disk backup_path/restic/ns-<namespace>/pvc-<pvc>): the slash keeps two names from colliding, and the prefixes keep every segment off rest-server’s reserved names (data, keys, locks, snapshots, config). Per-namespace credentials land in p0b-09d; this step does not share one rest-server login across namespaces. No per-volume repo PV or PVC. The VolSync pod’s TZ is time_zone (D15). platform-backups drops privileged-movers once no mover there mounts a hostPath. etcd snapshots stay in backup_path/etcd-snapshots.
+Hard limits: R5; R9; R25; R31. D3; D15; D42; D47; D51. One Deployment and one ClusterIP Service named restic on port 8000 in platform-backups, no Ingress, pinned to role.jarvis/backup=true, storing in backup_path/restic. Each repository is rest:http://restic.platform-backups.svc.cluster.local:8000/ns-<namespace>/pvc-<pvc> (on disk backup_path/restic/ns-<namespace>/pvc-<pvc>): the slash keeps two names from colliding, and the prefixes keep every segment off rest-server’s reserved names (data, keys, locks, snapshots, config). This server holds core’s one login. Hosted apps use the optional restic-apps server and their own credentials (p0b-09d). No per-volume repo PV or PVC. The VolSync pod’s TZ is time_zone (D15). platform-backups drops privileged-movers once no mover there mounts a hostPath. etcd snapshots stay in backup_path/etcd-snapshots.
 Done checks: The rest-server is Ready on the backup node. A scratch volume, applied through Flux like the p0b-09 test and removed afterward, backs up through it and restores into an empty PVC with a matching checksum; the log is in the PR. One PR.
 ```
 
 ```text
 ID:          p0b-09d
-Goal:        Set up one core restic credential for all core backups, and give each hosted app namespace with data its own restic credential and private repository.
+Goal:        Give each hosted app namespace with data its own restic credential and private repository. The one core restic credential for all core backups is done.
 Why:         Core is one trusted zone; hosted apps must not read or harm core or the chat bot’s data (D51, R31).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no app credential opens a core repository (R31, D48, D51).”
 Depends on:  p0b-09a
 Touches:     platform/backups/, tools/bootstrap-secrets, envs/<env>/secrets/<namespace>/, platform/backups/CONTRACT.md
-Hard limits: R25; R31. D47; D51. Core namespaces and the host-etcd-snapshots repository use the one core restic password and storage login. Each app-<name> namespace with data gets its own restic credential and private repository, which cannot open core’s or another app’s. Secrets live under envs/<env>/secrets/<namespace>/; only flux-system decrypts (D53). The core credential lands before the off-host copy (p0b-09e); an app’s credential lands before that app stores data.
+Hard limits: R25; R31. D47; D51. Core namespaces and the host-etcd-snapshots repository use the one core restic password and storage login. Each app-<name> namespace with data gets its own restic credential and private repository, which cannot open core’s or another app’s. Apps use a second server, restic-apps, with --private-repos; it is core, not an add-on, and off by default (one line per env turns it on). Core’s check and off-host copy may hold app passwords. App movers run privileged for now. An app login may forget and prune its own repositories for now; append-only servers with core-run pruning come later. Secrets live under envs/<env>/secrets/<namespace>/; only flux-system decrypts (D53). The core credential lands before the off-host copy (p0b-09e); an app’s credential lands before that app stores data.
 Done checks: A scratch PVC in an app-<name> namespace cannot open a core repository. One PR.
 ```
 
