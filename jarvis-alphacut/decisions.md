@@ -2,7 +2,7 @@
 
 Defaults chosen where `framework.md` is silent. Merging this file accepts all defaults except those marked Confirmed by Gordon.
 
-Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. Confirmed by Gordon 2026-10-20: D3, D44. Confirmed by Gordon 2026-10-31: D17, D42, D43, D45, D46, D47. Confirmed by Gordon 2026-11-02: D48–D67. The other entries are accepted-with-plan defaults.
+Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. Confirmed by Gordon 2026-10-20: D3, D44. Confirmed by Gordon 2026-10-31: D17, D42, D43, D45, D46, D47. Confirmed by Gordon 2026-11-02: D48–D67. Confirmed by Gordon 2026-11-04: D68. The other entries are accepted-with-plan defaults.
 
 These are the §11 defaults. They are recorded here. They are not copied into framework §10: this change adds only this file and `plan.md`.
 
@@ -419,9 +419,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D49
 
-- Decision: the k3s server token is sealed with the env’s secrets, and agents join with a separate agent token. Sealing an existing env’s token is an owner step (never a coding agent; the value is never printed). The rebuild path (“rebuild a dead node”) is written and rehearsed; for a single-node env the rehearsal is a planned outage on the owner’s go and never touches the data disk, so it proves recovery from OS loss, not disk loss (disk loss is the off-host copy’s job, D48).
+- Decision: the k3s server token is sealed with the env’s secrets, and agents join with a separate agent token. Sealing an existing env’s token is an owner step (never a coding agent; the value is never printed). The rebuild path (“rebuild a dead node”) is written and rehearsed. For a single-node env whose backups share the OS disk, the rehearsal is a planned outage on the owner’s go: a k3s uninstall and reinstall with the OS and `/var/lib/jarvis` kept. The new cluster starts from an empty etcd datastore and restores no snapshot; Git rebuilds everything. The sealed `server_token` is the short, passphrase-only form: a `K10<ca-hash>::server:<passphrase>` token carries the old CA’s hash, so it fails on a fresh CA. The passphrase is unchanged, so older etcd snapshots stay restorable. The rehearsal never wipes the data path, so it proves recovery from OS loss, not disk loss (disk loss is the off-host copy’s job, D48).
 - Reason: the join token is a cluster secret; a printed or unsealed copy cannot be rotated from Git.
-- Where: `p0a-12`, `p0a-14`, `p0b-13`; framework R7, R25, §8.
+- Where: `p0a-12`, `p0a-14`, `p0b-13`; framework R7, R25, §8. D60 holds what env-01’s rebuild does.
 - Status: Confirmed by Gordon 2026-11-02.
 
 ## D50
@@ -468,9 +468,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D56
 
-- Decision: the product repo is public; each instance repo is private; Flux can use an optional pull secret. Flux deploys only tags signed by owner-held keys, verified by Flux itself (not the forge’s web-merge key), mode `Tag`, on both the root sync (the instance repo) and the named core source. Because the FluxInstance `sync` block has no verify field, the env’s root source is a self-managing `GitRepository` that Ansible applies (FluxInstance `sync` dropped). Once the gate lands, nothing deploys until the owner pushes a signed release tag: core releases, Renovate bumps and env edits alike. Coding agents never create or push tags. Paid branch protection is optional, not the gate. The signing key’s public fingerprint and where the signing key lives go on the keep-safe list; “signing key lost or compromised: rotate the trusted key in Flux” is a Gordon break-glass action.
+- Decision: the product repo is public; each instance repo is private; Flux can use an optional pull secret. Once the gate lands, Flux deploys only tags signed by owner-held keys, verified by Flux itself (not the forge’s web-merge key), mode `Tag`, on both the root sync (the instance repo) and the named core source. Because the FluxInstance `sync` block has no verify field, the env’s root source is a self-managing `GitRepository` that Ansible applies (FluxInstance `sync` dropped). Once the gate lands, nothing deploys until the owner pushes a signed release tag: core releases, Renovate bumps and env edits alike. Coding agents never create or push tags. Paid branch protection is optional, not the gate. The signing key’s public fingerprint and where the signing key lives go on the keep-safe list; “signing key lost or compromised: rotate the trusted key in Flux” is a Gordon break-glass action. The gate lands in `p2-08a`, after the foundation build and before the chat bot holds Gordon’s real data (D68). Until then, the env-01 move (`p0b-13`) deploys both sources from `main` with no signature check.
 - Reason: the deploy gate is a signature Flux checks, not a forge merge setting.
-- Where: `p0a-13`, `p0b-13`, `p2-24`; framework R25, R34, R36, §6, §8.
+- Where: `p0a-13`, `p2-08a`, `p2-24`; framework R25, R34, R36, §6, §8.
 - Status: Confirmed by Gordon 2026-11-02.
 
 ## D57
@@ -496,9 +496,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D60
 
-- Decision: core is consumed through a named core source; each env lives in its own instance repo; upgrading is a core ref bump. env-01 moves to its own private repo after the foundation fixes and before the chat-bot phase writes instance data. GitHub is the source of truth: the product repo is `gordoncooper/jarvis`, env-01’s instance repo is `gordoncooper/jarvis-internal`, and Gitea is retired for Jarvis. At the split, env-01 is rebuilt fresh from the instance repo, not migrated in place: sealing its old k3s token, rotating its CA into name constraints and live-migrating its backup credentials are moot for env-01, but each runbook is still rehearsed once. bench is test-only; its data disk holds only test data but is still never wiped without the owner’s explicit say-so. Later-phase steps that write instance data (`p2-07` renders, `p2-10` bot profiles, P4a’s `apps.yaml`) write to the env’s instance repo.
+- Decision: core is consumed through a named core source; each env lives in its own instance repo; upgrading is a core ref bump. env-01 moves to its own private repo after the foundation fixes and before the chat-bot phase writes instance data. GitHub is the source of truth: the product repo is `gordoncooper/jarvis`, env-01’s instance repo is `gordoncooper/jarvis-internal`, and Gitea is retired for Jarvis. At the split, env-01 is rebuilt fresh from the instance repo, not migrated in place, and Flux deploys both sources from `main` with no signature check until the signed-tag gate lands (D56, D68). The rebuild is the D49 rehearsal: the CA is minted fresh with name constraints (D57), the agent token is rotated to its own value, the server token is kept in the short, passphrase-only form, and the restic password, the rest-server login and the off-host credentials move unchanged. The restic-password rotation rehearsal is its own later task (`p0b-13a`). bench is test-only; its data disk holds only test data but is still never wiped without the owner’s explicit say-so. Later-phase steps that write instance data (`p2-07` renders, `p2-10` bot profiles, P4a’s `apps.yaml`) write to the env’s instance repo.
 - Reason: one public product, one private instance per env; a core bump is the upgrade.
-- Where: `p0b-13`, `p2-07`, `p2-09`, `p2-10`, `p4a-02`; framework R1, R34, §6.
+- Where: `p0b-13`, `p0b-13a`, `p2-07`, `p2-09`, `p2-10`, `p4a-02`; framework R1, R34, §6.
 - Status: Confirmed by Gordon 2026-11-02.
 
 ## D61
@@ -549,3 +549,10 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 - Reason: backing up rebuildable caches doubles their disk and buys no recovery.
 - Where: `p0b-02`, `p0b-09c`; framework R31, §5 Backups.
 - Status: Confirmed by Gordon 2026-11-02.
+
+## D68
+
+- Decision: moving env-01 to `gordoncooper/jarvis-internal` and rebuilding it fresh is one step (`p0b-13`). In it Flux deploys both sources from `main` with no signature check: the instance root over one read-only deploy key (D51), core with no credential. The signed-tag gate (D56: Flux `verify`, mode `Tag`, both sources, only Gordon’s keys) is a separate, later step (`p2-08a`). It lands after the foundation build and before the chat bot holds Gordon’s real data, so `p2-09`, the first real data volume, depends on it.
+- Reason: the move and the rebuild are a large change on their own; the gate only has to hold before real data arrives.
+- Where: `p0b-13`, `p2-08a`, `p2-09`; framework R7, R25, R33, R36, §1, §4, §5, §6, §8; D56, D60.
+- Status: Confirmed by Gordon 2026-11-04.
