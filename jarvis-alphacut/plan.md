@@ -5,6 +5,7 @@ Derived only from jarvis-alphacut/framework.md. Defaults the framework leaves op
 ## Stop and ask
 
 - Before building p1-10, confirm with Gordon whether alert routing stays the default or changes.
+- Before building p0b-13a or p2-08a, confirm with Gordon which exit check each advances. No current P0b or P2 exit check names the restic-password rotation rehearsal or the signed-tag deploy gate, and an exit check changes only by his decision (§11).
 
 ## Gordon-only actions
 
@@ -31,13 +32,15 @@ One list, from §8. Each action names the task that waits on it.
 - P0: rotate any age key an agent user held during bootstrap (a one-off exception to D17), before real data. Task: p0a-14.
 - P0: before any env holds real data, confirm both offline age-key copies and test one by decrypting a secret (§8 custody, D50). Task: p0b-12.
 - P0: set up env-01’s temporary off-host restic target on the bastion with its own user and append-only access (D48). Task: p0b-09e.
-- P0: create gordoncooper/jarvis-internal, push the first signed release tags, and rebuild env-01 from the instance repo (D56, D60). Task: p0b-13.
-- P0: signing key lost or compromised: rotate the trusted key in Flux (D56). Task: p0b-13.
+- P0: create gordoncooper/jarvis-internal and rebuild env-01 from the instance repo, with Flux deploying both sources from main (D60, D68). Task: p0b-13.
+- P0: run the restic-password rotation rehearsal on env-01; it needs the age key, so it is an owner run (D17). Task: p0b-13a.
 - Deferred, not a P0b exit requirement: run the coding-agent worker as its own OS user on the bastion, with no SSH keys to nodes, no kubeconfig, no age key or sops config and no access to other users’ homes; it reads and writes only its own repo checkout and pushes through its GitHub token. Until then .cursor/cli.json is the coding agents’ only guard, and live checks stay the operator’s (§2). Trigger: before coding runs that are unattended or take untrusted input (framework §9). Task: none.
 - P0: for each node that has a second disk, the hardware admin prepares and mounts it at the data path, and inventory sets data_disk: true (D42). Example commands are in docs/deploy.md. env-01 has none. Task: p0a-11b.
 - P0: once App DNS and the CA exist, set router forwarding of the env’s DNS suffix and trust envs/<env>/ca.crt on the controller and tailnet test devices (framework §8 step 7). Task: p0b-08.
 - P1: create the send-only alerts bot with BotFather. Task: p1-09.
 - P1: send it /start once and record his chat ID. Task: p1-09.
+- P2: push the first signed release tags, before the chat bot holds real data (D56, D68). Task: p2-08a.
+- P2: signing key lost or compromised: rotate the trusted key in Flux (D56). Task: p2-08a.
 - P2: create concierge’s Telegram token. Task: p2-15.
 - P2: record Gordon’s user ID (the chat ID from P1) for concierge’s allow-list. Task: p2-15.
 - P2: approve the ops deploy’s xAI device login. Task: p2-13.
@@ -61,7 +64,7 @@ One list, from §8. Each action names the task that waits on it.
 - Standing: verify the [G] exit checks (§2). Tasks: p0b-11, p1-13, p2-15, p2-25, p3-03, p3-08, p4a-07.
 - Standing: the repo owner merges every PR (D61). Task: p0a-01.
 - Standing: review PRs held by admin-gate and add admin-approved from his own account. Task: p2-24 (also any later protected PR, including p4a-05, p4a-07, p4b-01, p4b-15).
-- Standing: push signed release tags; coding agents never create or push tags (D56). Task: p0b-13.
+- Standing: once the gate lands, push signed release tags; coding agents never create or push tags (D56, D68). Task: p2-08a.
 - Standing: merge Hermes bump PRs (R33). Task: p2-20.
 - Standing: re-run site.yml after merging an infra/ PR. Task: p0a-13.
 - Standing: reboot when a pending-reboot notice says so, using the drain-and-reboot runbook (D52). Task: p0a-11.
@@ -95,7 +98,7 @@ Why:         Services, the code-factory, and app hosting depend on this contract
 Advances:    P0a exit check: “One required check on main, ci, runs every ci/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, a missing flux_git_repo_url, a deny list missing a whole deny class).”
 Depends on:  p0a-01
 Touches:     docs/code-delivery/CONTRACT.md
-Hard limits: R34; R36 (admin-gate is the PR-risk check; the deploy gate is Flux signed tags, D56). Gitea is retired for Jarvis (D60). Forgejo stays a §9 seam: this contract names it as the planned second provider and adds no Forgejo code. D7.
+Hard limits: R34; R36 (admin-gate is the PR-risk check; the deploy gate is Flux signed tags, D56, landing in p2-08a, D68). Gitea is retired for Jarvis (D60). Forgejo stays a §9 seam: this contract names it as the planned second provider and adds no Forgejo code. D7.
 Done checks: CONTRACT.md lists repo hosting, CI, the issue queue, PR open and merge, the approval-label check, and the registry, and names the check that proves each, without a plan code. One PR.
 Proven by:   Env schema validation and the provider checks (§5).
 ```
@@ -243,7 +246,7 @@ Why:         The age key and the first Flux apply are the bootstrap bridge (R1, 
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-12, p0a-04
 Touches:     infra/ansible/roles/flux-operator, infra/ansible/roles/kubeconfig, infra/ansible/site.yml, platform/flux-operator/ (chart pin)
-Hard limits: R1; R25. D11; D17; D34; D42; D53; D56. The private age key is applied once as flux-system/sops-age, which Flux never reconciles, with no_log on every task that handles it. Only flux-system decrypts. Flux runs with multi-tenancy lockdown; every Kustomization and HelmRelease names its service account. The root source is a self-managing GitRepository that Ansible applies (FluxInstance sync dropped). Signature verification of both sources lands in p0b-13. site.yml needs the age key only while flux-system/sops-age is absent, so the first run on a fresh node and an age-key swap are owner runs; later runs may be the agent user’s (D17). kubeconfig is its own small role that writes only the running user’s ~/.kube/jarvis-<env>.yaml, mode 0600, by slurp and copy, check-mode safe, with no backup, and never writes ~/.kube/config. Bastion kubectl uses that file. Tags are set at role or play level (§11). The operator chart version has one pin, in platform/flux-operator/, which this role reads and Renovate bumps.
+Hard limits: R1; R25. D11; D17; D34; D42; D53; D56. The private age key is applied once as flux-system/sops-age, which Flux never reconciles, with no_log on every task that handles it. Only flux-system decrypts. Flux runs with multi-tenancy lockdown; every Kustomization and HelmRelease names its service account. The root source is a self-managing GitRepository that Ansible applies (FluxInstance sync dropped). Signature verification of both sources lands in p2-08a (D68), not in p0b-13. site.yml needs the age key only while flux-system/sops-age is absent, so the first run on a fresh node and an age-key swap are owner runs; later runs may be the agent user’s (D17). kubeconfig is its own small role that writes only the running user’s ~/.kube/jarvis-<env>.yaml, mode 0600, by slurp and copy, check-mode safe, with no backup, and never writes ~/.kube/config. Bastion kubectl uses that file. Tags are set at role or play level (§11). The operator chart version has one pin, in platform/flux-operator/, which this role reads and Renovate bumps.
 Done checks: site.yml runs in §8 order: base-os on all, node-disk on data_disk, the k3s server on control_plane, the k3s agent on all:!control_plane, then kubeconfig and flux-operator on control_plane. site.yml --tags kubeconfig runs only the kubeconfig role. The live proof is p0a-14. One PR.
 ```
 
@@ -517,13 +520,24 @@ Done checks: The guard test lists the four new objects and passes. None of those
 
 ```text
 ID:          p0b-13
-Goal:        Move env-01 to gordoncooper/jarvis-internal, turn on Flux signature checks on owner-signed tags for the root sync and the named core source, and rebuild env-01 fresh from the instance repo.
-Why:         Instance data must live in the private instance repo before the chat-bot phase writes it, and nothing deploys until the owner pushes a signed tag (D56, D60).
+Goal:        Move env-01 to gordoncooper/jarvis-internal and rebuild env-01 fresh from the instance repo.
+Why:         Instance data must live in the private instance repo before the chat-bot phase writes it (D60). The move and the rebuild are one large change; the signed-tag gate is its own later step (D68).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no app credential opens a core repository (R31, D48, D51).”
 Depends on:  p0b-12
-Touches:     infra/ansible/roles/flux-operator, the env-01 instance repo, Flux GitRepository verify
-Hard limits: R1; R25; R34. D49; D56; D57; D60. The whole gate (both sources, mode Tag, trusting only Gordon’s keys) lands in this step. Coding agents never create or push tags. env-01 is rebuilt fresh from the instance repo, not migrated in place. Sealing its old k3s token, rotating its CA into name constraints and live-migrating its backup credentials are moot for env-01, but each runbook is still rehearsed once. bench is test-only; its data disk holds only test data and is never wiped without the owner’s explicit say-so. After this step, later-phase instance writes (p2-07, p2-10, P4a apps.yaml) go to the instance repo.
-Done checks: Flux verifies both GitRepositories. A commit on main without a signed tag does not deploy. env-01 is Ready from the instance repo after the rebuild; that rebuild is the dead-node rehearsal (owner’s go, data disk untouched, D49). The three runbooks have been rehearsed once. One PR, plus the owner’s first signed tags.
+Touches:     infra/ansible/roles/flux-operator, the env-01 instance repo
+Hard limits: R1; R25; R34. D49; D51; D57; D60; D68. Flux reads the instance root with one read-only deploy key (D51) and core with no credential, both at main, with no signature check; the gate is p2-08a. env-01 is rebuilt fresh from the instance repo, not migrated in place. The rebuild is the D49 rehearsal: a k3s uninstall and reinstall with the OS and /var/lib/jarvis kept. The new cluster starts from an empty etcd datastore and restores no snapshot, and Git rebuilds everything. The CA is minted fresh with name constraints (D57). The agent token is rotated to its own value. The sealed server token is kept in the short, passphrase-only form: a K10<ca-hash>::server:<passphrase> token carries the old CA’s hash and fails on a fresh CA. The passphrase is unchanged, so older etcd snapshots stay restorable. The restic password, the rest-server login and the off-host credentials move unchanged. bench is test-only; its data disk holds only test data and is never wiped without the owner’s explicit say-so. After this step, later-phase instance writes (p2-07, p2-10, P4a apps.yaml) go to the instance repo.
+Done checks: Both GitRepositories are Ready at main. env-01 is Ready from the instance repo after the rebuild, started from an empty etcd datastore; that rebuild is the dead-node rehearsal (owner’s go, OS and /var/lib/jarvis kept, D49). The sealed server token is the short form, and the fresh CA carries the name constraint. One PR.
+```
+
+```text
+ID:          p0b-13a
+Goal:        Rehearse the restic-password rotation runbook once on the rebuilt env-01.
+Why:         The rebuild moves the restic password unchanged (D60), so rotation is not rehearsed there; the runbook must work before real data depends on it (R31, D50, D57).
+Advances:    none fits: no P0b exit check names this rehearsal (see Stop and ask).
+Depends on:  p0b-13
+Touches:     the restic-rotation runbook, the env-01 instance repo secrets/<namespace>/
+Hard limits: R25; R31. D17; D48; D50; D51; D57. The rotation needs the age key, so it is an owner run. Tools refuse paths that would strand backups. The value is never printed. The data path is never wiped.
+Done checks: The runbook has been run once on env-01. Afterwards make verify ENV=env-01 passes, the off-host copy’s freshness reports current, and a volume restore from a backup made before the rotation matches its checksum. One PR, plus the owner run.
 ```
 
 ### Exit checks
@@ -784,12 +798,23 @@ Done checks: pytest covers one valid profile and one colliding name. A seeded ba
 ```
 
 ```text
+ID:          p2-08a
+Goal:        Turn on Flux signature checks on owner-signed tags (mode Tag) for the root sync and the named core source.
+Why:         Nothing may deploy unsigned once the chat bot holds Gordon’s real data; the env-01 move deployed from main (R25, R36, D56, D68).
+Advances:    none fits: no P2 exit check names the deploy gate (see Stop and ask).
+Depends on:  p0b-13
+Touches:     infra/ansible/roles/flux-operator, the env-01 instance repo, Flux GitRepository verify
+Hard limits: R25; R34; R36. D56; D68. The whole gate (both sources, mode Tag, trusting only Gordon’s keys) lands in this step, after the foundation build and before the first task that stores Gordon’s real data (p2-09). Coding agents never create or push tags. The signing key’s public fingerprint and where the key lives go on the keep-safe list (D56).
+Done checks: Flux verifies both GitRepositories. A commit on main without a signed tag does not deploy. One PR, plus the owner’s first signed tags.
+```
+
+```text
 ID:          p2-09
 Goal:        Deploy the ops overlay: its own volume, secrets, read-only ServiceAccount, network policy, Ingress, and dashboard login.
 Why:         Gordon reaches the three bots through the ops dashboard, which Gatus watches and which requires a login (R11, R13, R27).
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
 Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).”
-Depends on:  p2-06b, p2-05, p1-08, p0b-09e, p0b-13
+Depends on:  p2-06b, p2-05, p1-08, p0b-09e, p0b-13, p2-08a
 Touches:     services/hermes/deploy/ops/, the env-01 instance repo secrets/<namespace>/
 Hard limits: R5; R11; R13; R27; R28. D30; D39 (egress; hosts in the core CONTRACT.md as documentation); D48; D51; D60. Namespace hermes-ops. No shared volume or secret with the other deploy. ServiceAccount: get, list, watch, no Secrets. The pod sets TZ from cluster-vars. The API key, password hash, and signing secret are the bootstrap Secrets in the instance repo, applied now that the namespace exists (D10). Its volume is the first real data PVC with a backup (R31); the core backup credential and the off-host copy already exist. The backup policy enrolls it, so the deploy carries no ReplicationSource, restic Secret or mover annotation (D47). A live SQLite copy can restore torn, so a consistent copy is on the volume before the nightly backup (Example: a dump written just before the backup hour). Hostname hermes-ops.alpha.lan.
 Done checks: The pod is Ready, https://hermes-ops.alpha.lan asks for login, and Gatus lists the endpoint. One PR.
@@ -953,7 +978,7 @@ Done checks: Three seeded PRs fail ci, and the live ops dashboard manifest has a
 ```text
 ID:          p2-24
 Goal:        Add admin-gate, seed the protected-path and label-actor PRs, and have Gordon turn the check on if using branch protection.
-Why:         admin-gate stays the PR-risk check on the product repo and jarvis-apps; the deploy gate is Flux signed tags (R36, D56, D61). Fix order (§11): the check is the automated PR-risk gate; the rulebook does not replace it.
+Why:         admin-gate stays the PR-risk check on the product repo and jarvis-apps; the deploy gate is Flux signed tags, landing in p2-08a (R36, D56, D61, D68). Fix order (§11): the check is the automated PR-risk gate; the rulebook does not replace it.
 Advances:    P2 exit check: “admin-gate is the PR-risk check (R36); branch protection is optional and is not the deploy gate (D56): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Depends on:  p2-07, p2-22, p2-23
 Touches:     .github/workflows/admin-gate.yml, ci/checks/admin-gate, jarvis-apps/.github/workflows/ci.yml, docs/code-delivery/CONTRACT.md
