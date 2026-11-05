@@ -37,8 +37,8 @@ One list, from §8. Each action names the task that waits on it.
 - Deferred, not a P0b exit requirement: run the coding-agent worker as its own OS user on the bastion, with no SSH keys to nodes, no kubeconfig, no age key or sops config and no access to other users’ homes; it reads and writes only its own repo checkout and pushes through its GitHub token. Until then .cursor/cli.json is the coding agents’ only guard, and live checks stay the operator’s (§2). Trigger: before coding runs that are unattended or take untrusted input (framework §9). Task: none.
 - P0: for each node that has a second disk, the hardware admin prepares and mounts it at the data path, and inventory sets data_disk: true (D42). Example commands are in docs/deploy.md. env-01 has none. Task: p0a-11b.
 - P0: once App DNS and the CA exist, set router forwarding of the env’s DNS suffix and trust envs/<env>/ca.crt on the controller and tailnet test devices (framework §8 step 7). Task: p0b-08.
-- P1: create the send-only alerts bot with BotFather. Task: p1-09.
-- P1: send it /start once and record his chat ID. Task: p1-09.
+- P1 (observability add-on): create the send-only alerts bot with BotFather. Task: p1-09.
+- P1 (observability add-on): send it /start once and record his chat ID. Task: p1-09.
 - P2: push the first signed release tags, before the chat bot holds real data (D56, D68). Task: p2-08a.
 - P2: signing key lost or compromised: rotate the trusted key in Flux (D56). Task: p2-08a.
 - P2: create concierge’s Telegram token. Task: p2-15.
@@ -50,7 +50,7 @@ One list, from §8. Each action names the task that waits on it.
 - P3: publish the Google OAuth app as In production. Task: p3-00.
 - P3: create the Google Cloud OAuth client and enable the Gmail and Calendar APIs. Task: p3-00.
 - P3: create the no-repos public-read-only GitHub token. Task: p3-02.
-- P3: run make google-consent. Task: p3-00.
+- P3: run the Hermes add-on’s google-consent (make -C services/hermes google-consent ENV=<env>). Task: p3-00.
 - P3: send himself one email with subject jarvis-p3-seed. Task: p3-01a.
 - P4: approve the code-factory deploy’s xAI device login. Task: p4b-05.
 - P4: create the Cursor user API key. Task: p4b-06a.
@@ -123,7 +123,7 @@ Why:         Git has to hold the §8 bootstrap secrets before Flux can decrypt o
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-03
 Touches:     tools/bootstrap-secrets, tools/seal, Makefile
-Hard limits: R7; R25; R35. The script creates the internal CA (name-constrained to the env’s DNS suffix, D57), the Grafana admin password, and each deploy’s Hermes API key, dashboard password hash, and signing secret (D16). Per-namespace restic credentials land in p0b-09d (D51). It never overwrites. The real age private key stays out of CI (D33). Two copies of one age key; a repo command test-decrypts one secret and prints only pass or fail (D50). D10: only a restic secret is referenced in-cluster at P0a. Both tools take an explicit env (D45). A .sops.yaml rule for an env that does not exist fails (D55).
+Hard limits: R7; R25; R35. The script creates the internal CA (name-constrained to the env’s DNS suffix, D57) and, for each add-on the env enables, the secrets that add-on declares (Examples: observability’s Grafana admin password; each Hermes deploy’s API key, dashboard password hash and signing secret, D16). It hard-codes no add-on name and mints nothing for an add-on the env leaves off (D69). Per-namespace restic credentials land in p0b-09d (D51). It never overwrites. The real age private key stays out of CI (D33). Two copies of one age key; a repo command test-decrypts one secret and prints only pass or fail (D50). D10: only a restic secret is referenced in-cluster at P0a. Both tools take an explicit env (D45). A .sops.yaml rule for an env that does not exist fails (D55).
 Done checks: A unit test with a throwaway age key shows a second run leaves the files byte-identical. make bootstrap-secrets runs on the controller, by Gordon or the agent user since it needs only the .sops.yaml public recipient (D17), and its SOPS output is committed. One PR.
 ```
 
@@ -333,7 +333,7 @@ Why:         A hostname is one Ingress, and the contract is written before Traef
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0a-18
 Touches:     platform/traefik/CONTRACT.md
-Hard limits: R5; R28. D7. The contract states App DNS answers the name, the wildcard covers it, and the component adds its own Gatus check, marked planned until Gatus is installed. Gatus trusts the public root and resolves the zone through cluster DNS.
+Hard limits: R5; R28. D7. The contract states App DNS answers the name, the wildcard covers it, and, when the observability add-on is enabled, the component adds its own Gatus check, marked planned until Gatus is installed. Gatus trusts the public root and resolves the zone through cluster DNS. Core’s own health is make verify, not Gatus (D69).
 Done checks: CONTRACT.md has Offers, Expects, Health, Config, and Proven by, naming checks without plan codes. One PR.
 Proven by:   The R5 manifest lint and the reachability checks (§5).
 ```
@@ -392,7 +392,7 @@ Why:         Fix order (§11): components already set the fields (p0b-03 through
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-03, p0b-05
 Touches:     ci/checks/manifest-lint, ci/checks/loadbalancer
-Hard limits: R5 (memory request and limit, CPU request, no CPU limit on long-running containers, probes, stdout logs, Gatus when the endpoint exists). R28. D30: short-lived chart hooks, Jobs, init containers and test pods keep chart defaults.
+Hard limits: R5 (memory request and limit, CPU request, no CPU limit on long-running containers, probes, stdout logs, and a Gatus check once the endpoint exists and the observability add-on is enabled, D69). R28. D30: short-lived chart hooks, Jobs, init containers and test pods keep chart defaults.
 Done checks: A seeded manifest missing a memory limit fails. A seeded LoadBalancer besides Traefik and App DNS fails. Current platform manifests pass. One PR, shared with p0b-07 (same area).
 ```
 
@@ -551,6 +551,8 @@ Done = attached make verify ENV=<env> output, plus this phase’s drills and eva
 
 Goal: Gordon sees the system and gets alerts without Hermes.
 
+P1 builds the observability add-on (D69). Its tasks apply to an env that enables it; core’s own health is make verify.
+
 ### Contracts
 
 ```text
@@ -690,8 +692,8 @@ Advances:    P1 exit check: “Gatus checks every exposed endpoint; its status p
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
 Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p1-11, p1-12, p1-08
-Touches:     Makefile, tools/verify/
-Hard limits: R8; R35. D17. The tailnet Gatus load is the [G] line.
+Touches:     services/observability/verify/ (the observability verify component)
+Hard limits: R8; R35. D17; D69 (the component runs only when the env enables observability). The tailnet Gatus load is the [G] line.
 Done checks: make verify ENV=<env> exits 0 with dashboard evidence and the Gatus page. The alert proofs are attached as their own drills. Owner checklist, pasted outside the script: Gordon’s tailnet [G] paste. One PR.
 ```
 
@@ -712,16 +714,16 @@ Goal: Gordon chats with the ops bots through the dashboard and Telegram, with me
 
 ```text
 ID:          p2-01
-Goal:        Write the Model provider, Assistant API, and Skill contract sections of the Hermes core CONTRACT.md with proven by.
-Why:         Tiers, the assistant API, and the skill rules are one core contract, written before any bot is deployed (R15, R17, R18, R23, §5).
+Goal:        Write the Model provider, Assistant API, and Skill contract sections of the chat-bot slot CONTRACT.md with proven by, and the Hermes core CONTRACT.md that says how Hermes meets them.
+Why:         Tiers, the assistant API, and the skill rules are one slot contract, written before any bot is deployed, so core and other add-ons depend on the slot and never on Hermes by name (R15, R17, R18, R23, §5, D69).
 Advances:    P2 exit check: “With the primary model blocked, chat answers from the fallback model; with the provider blocked, the dashboard and Telegram show an error within 30 s and Gatus flags it (R18).”
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
 Advances:    P2 exit check: “Memory: a fact is recalled after a pod restart in a new session; “forget that” is staged, and approving it removes the fact; a memory export produces a file. Memory and skill writes (R12) wait for approval; a test approves one and rejects one.”
 Advances:    P2 exit check: “Weather and distance questions get correct answers through the geo MCP server (weather: Open-Meteo; distance: Nominatim plus the OSRM demo, typical drive time) with attribution; the geo tool’s evals in concierge pass.”
 Advances:    P3 exit check: “An eval asserts no bot can send, delete, apply Gmail labels, write to calendar or reach Drive.”
 Depends on:  p1-13
-Touches:     services/hermes/core/CONTRACT.md
-Hard limits: R13; R15; R16; R17; R18; R23; R27. D7; D66. Hermes’s model login is a swappable provider (subscription login, a local model, or an API key); env-01’s first login is xai-oauth. A local LLM or a gateway is another base_url and is not built (§9). Paths are / for the dashboard and /api/<profile>/v1 per profile. /v1/audio/* is reserved and this task adds no audio handler; the GPU runtime and HTTPS path land now so a first voice version over HTTPS fits later (D62). Memory export produces a file. MCP servers run inside the deploy pod, pinned, no sidecars. Write tools run only behind a confirm step. This plan’s writes are inbox drafts and spec-writer’s issues. The geo section records the Nominatim policy decision: at most 1 request per second, cache, User-Agent with Gordon’s contact email, attribution, home taken from SOPS and never looked up.
+Touches:     services/chat-bot/CONTRACT.md, services/hermes/core/CONTRACT.md
+Hard limits: R13; R15; R16; R17; R18; R23; R27. D7; D66; D69. The three sections live in services/chat-bot/CONTRACT.md (hosting, storage, backups, secrets and URL/ingress are the slot’s other sections); services/hermes/core/CONTRACT.md holds only how Hermes meets the slot and no model-provider, assistant-API or skill-contract text. The profile schema and the deploy contracts stay with Hermes. Hermes’s model login is a swappable provider (subscription login, a local model, or an API key); env-01’s first login is xai-oauth. A local LLM or a gateway is another base_url and is not built (§9). Paths are / for the dashboard and /api/<profile>/v1 per profile. /v1/audio/* is reserved and this task adds no audio handler; the GPU runtime and HTTPS path land now so a first voice version over HTTPS fits later (D62). Memory export produces a file. MCP servers run inside the deploy pod, pinned, no sidecars. Write tools run only behind a confirm step. This plan’s writes are inbox drafts and spec-writer’s issues. The geo section records the Nominatim policy decision: at most 1 request per second, cache, User-Agent with Gordon’s contact email, attribution, home taken from SOPS and never looked up.
 Done checks: The three sections each have Offers, Expects, Health, Config, and Proven by, naming checks without plan codes, including the Nominatim decision. One PR.
 Proven by:   The fallback check, Gatus provider reachability, and the R23 CI grep (§5). The scripted-prompt check and the memory-export check (§5). The R16 pin and tag check, the R13 toolset policy check, and the no-write eval (§5).
 ```
@@ -744,8 +746,8 @@ Goal:        Add the Hermes dashboard half of the Login contract, with proven by
 Why:         The ops dashboard requires its own login, and that login works offline (R18, R27).
 Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).”
 Depends on:  p2-01, p1-01
-Touches:     services/observability/CONTRACT.md, services/hermes/core/CONTRACT.md
-Hard limits: R18; R27. D7; D16. Username admin, password hash and signing secret from bootstrap-secrets. The assistant API uses the deploy API key, separate from the dashboard login.
+Touches:     services/observability/CONTRACT.md, services/hermes/core/CONTRACT.md (how Hermes meets the slot’s URL/ingress and login terms)
+Hard limits: R18; R27. D7; D16; D69. Username admin, password hash and signing secret from bootstrap-secrets. The assistant API uses the deploy API key, separate from the dashboard login.
 Done checks: The Login contract names both UIs and the Hermes proven-by line. One PR.
 Proven by:   The R27 CI check and the dashboard-login check (§5).
 ```
@@ -781,8 +783,8 @@ Why:         Hermes is the consumer that re-adds hermes.yaml (D54). One checked-
 Advances:    P2 exit check: “admin-gate is the PR-risk check (R36); branch protection is optional and is not the deploy gate (D56): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Advances:    P0a exit check: “One required check on main, ci, runs every ci/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, a missing flux_git_repo_url, a deny list missing a whole deny class).”
 Depends on:  p2-06b, p0a-05, p0b-13
-Touches:     tools/render-profiles, the env-01 instance repo (values/hermes.yaml, rendered/), the stale-render test in ci/tests/test_flux_entry.py (adds the Hermes render)
-Hard limits: R4. D54; D60. hermes.yaml is re-added in the instance repo. rendered/ is generated and never hand-edited. The stale-render seed lands with this render. This step adds validation of the hermes.* keys it renders (D45).
+Touches:     services/hermes/tools/render-profiles, services/hermes/Makefile, the env-01 instance repo (values/hermes.yaml, rendered/), the stale-render test in ci/tests/test_flux_entry.py (adds the Hermes render)
+Hard limits: R4. D54; D60; D69 (the render script belongs to the Hermes add-on, not to core tools/ or the root Makefile). hermes.yaml is re-added in the instance repo. rendered/ is generated and never hand-edited. The stale-render seed lands with this render. This step adds validation of the hermes.* keys it renders (D45).
 Done checks: A fresh render matches rendered/ in the instance repo. A seeded PR that edits rendered/ without rerendering fails ci. One PR.
 ```
 
@@ -816,7 +818,7 @@ Advances:    P2 exit check: “A scripted prompt through the assistant API (/api
 Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).”
 Depends on:  p2-06b, p2-05, p1-08, p0b-09e, p0b-13, p2-08a
 Touches:     services/hermes/deploy/ops/, the env-01 instance repo secrets/<namespace>/
-Hard limits: R5; R11; R13; R27; R28. D30; D39 (egress; hosts in the core CONTRACT.md as documentation); D48; D51; D60. Namespace hermes-ops. No shared volume or secret with the other deploy. ServiceAccount: get, list, watch, no Secrets. The pod sets TZ from cluster-vars. The API key, password hash, and signing secret are the bootstrap Secrets in the instance repo, applied now that the namespace exists (D10). Its volume is the first real data PVC with a backup (R31); the core backup credential and the off-host copy already exist. The backup policy enrolls it, so the deploy carries no ReplicationSource, restic Secret or mover annotation (D47). A live SQLite copy can restore torn, so a consistent copy is on the volume before the nightly backup (Example: a dump written just before the backup hour). Hostname hermes-ops.alpha.lan.
+Hard limits: R5; R11; R13; R27; R28. D30; D39 (egress; hosts in the ops deploy’s CONTRACT.md as documentation); D48; D51; D60. Namespace hermes-ops. No shared volume or secret with the other deploy. ServiceAccount: get, list, watch, no Secrets. The pod sets TZ from cluster-vars. The API key, password hash, and signing secret are the bootstrap Secrets in the instance repo, applied now that the namespace exists (D10). Its volume is the first real data PVC with a backup (R31); the core backup credential and the off-host copy already exist. The backup policy enrolls it, so the deploy carries no ReplicationSource, restic Secret or mover annotation (D47). A live SQLite copy can restore torn, so a consistent copy is on the volume before the nightly backup (Example: a dump written just before the backup hour). Hostname hermes-ops.alpha.lan.
 Done checks: The pod is Ready, https://hermes-ops.alpha.lan asks for login, and Gatus lists the endpoint. One PR.
 ```
 
@@ -849,7 +851,7 @@ Why:         homelab has to read the cluster, Flux, and metrics, and has to answ
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
 Depends on:  p2-10, p1-05
 Touches:     ops deploy volume, ops profile toolsets, the pinned kubernetes-mcp-server and mcp-victoriametrics binaries
-Hard limits: R13; R15; R16. D29. The Kubernetes MCP is read-only and cannot read Secrets. mcp-victoriametrics is the official VictoriaMetrics MCP server, read-only, a pinned release binary on the deploy volume, and it queries VictoriaMetrics only. homelab’s written reason for these tools is in profile.yaml. No terminal tool. No in-repo metrics server.
+Hard limits: R13; R15; R16. D29; D69 (the metric reads apply when the env enables observability). The Kubernetes MCP is read-only and cannot read Secrets. mcp-victoriametrics is the official VictoriaMetrics MCP server, read-only, a pinned release binary on the deploy volume, and it queries VictoriaMetrics only. homelab’s written reason for these tools is in profile.yaml. No terminal tool. No in-repo metrics server.
 Done checks: The deploy volume holds the pinned mcp-victoriametrics binary, and a fixture query returns the workload with the highest memory. The deployed memory prompt is p2-17. One PR.
 ```
 
@@ -870,8 +872,8 @@ Goal:        Route /api/<profile>/v1 to each bot and run the scripted non-error 
 Why:         The assistant API is the only supported way to talk to a bot (R17).
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
 Depends on:  p2-10, p2-13
-Touches:     services/hermes/deploy/ops/ routing, tools/verify/
-Hard limits: R17. The API requires the deploy API key. The three profile names are concierge, inbox, and homelab. This extends make verify ENV= with that standing check.
+Touches:     services/hermes/deploy/ops/ routing, services/hermes/verify/
+Hard limits: R17; D69. The API requires the deploy API key. The three profile names are concierge, inbox, and homelab. The check is part of the Hermes verify component in services/hermes/verify/, which make verify ENV= runs only when the env enables Hermes; core tools/verify/ gains no Hermes check.
 Done checks: A scripted prompt to each of the three URLs returns a non-error answer. One PR.
 ```
 
@@ -915,7 +917,7 @@ Why:         A dead provider has to show an error within about 30 seconds instea
 Advances:    P2 exit check: “Each bot’s evals (≥3) pass against the deployed bots (the eval run attached beside make verify ENV=<env>, R38); usage is readable in Hermes analytics and the grok.com dashboard [G]; with the subscription login revoked or capped (a 401 test fixture stands in; the real login stays signed in), the dashboard and Telegram show an error within ~30 s and the eval run fails (R18).”
 Advances:    P2 exit check: “With the primary model blocked, chat answers from the fallback model; with the provider blocked, the dashboard and Telegram show an error within 30 s and Gatus flags it (R18).”
 Depends on:  p2-13, p2-15, p2-17, p1-08
-Touches:     Gatus provider check, tools/verify/, llm_provider_host in the env schema, env-01 and env-00
+Touches:     Gatus provider check (observability add-on), services/hermes/verify/, llm_provider_host in the env schema, env-01 and env-00
 Hard limits: R8; R18. D19; D20; D39; D45 (llm_provider_host, read by Hermes and the Gatus provider probe, so one override trips both). The capped-login drill is a 401 fixture. The real login stays signed in. The drills restore xai-oauth before the task ends. Hosts in the contract are documentation. This step adds validation of llm_provider_host (D45). The drills are their own runs.
 Done checks: The log shows a fallback-model answer, a dashboard error within 30 seconds when the provider host is overridden, the same dashboard error within about 30 seconds for the 401 fixture, and the eval run failing during that window and passing after restore. Owner checklist: Gordon’s paste from a Telegram message he sends during the drill (D17). One PR.
 ```
@@ -926,8 +928,8 @@ Goal:        Record usage from Hermes analytics and the grok.com confirmation li
 Why:         Subscription use has to be visible per bot and on the subscription dashboard (R23).
 Advances:    P2 exit check: “Each bot’s evals (≥3) pass against the deployed bots (the eval run attached beside make verify ENV=<env>, R38); usage is readable in Hermes analytics and the grok.com dashboard [G]; with the subscription login revoked or capped (a 401 test fixture stands in; the real login stays signed in), the dashboard and Telegram show an error within ~30 s and the eval run fails (R18).”
 Depends on:  p2-14, p2-17
-Touches:     tools/verify/
-Hard limits: R23. D18. No usage data is copied into Git.
+Touches:     services/hermes/verify/
+Hard limits: R23. D18; D69 (the Hermes verify component). No usage data is copied into Git.
 Done checks: The verify log quotes a non-empty Hermes analytics usage field. The grok.com dashboard line is a [G] owner checklist item (D17). One PR.
 ```
 
@@ -937,8 +939,8 @@ Goal:        Make a Hermes bump wait on a digest-keyed VolSync backup, keep auto
 Why:         Hermes upgrades break, and the pre-upgrade backup has to finish before the new digest rolls (R33, R38).
 Advances:    P2 exit check: “A test Hermes bump PR shows auto-merge is off, its deploy waited for the digest-keyed pre-upgrade backup, and the evals then ran against the deployed bot (R33).”
 Depends on:  p2-17, p0b-09
-Touches:     services/hermes/deploy/ops/ Flux dependency, tools/hermes-backup, renovate.json
-Hard limits: R31; R33; R38. The ops Kustomization depends on a VolSync backup triggered by the new digest. make hermes-backup quiesces or dumps SQLite first, runs one on-demand backup of the PVC and waits for it to finish, and leaves no manual trigger set on the generated source, because VolSync ignores the schedule while one is set; nothing is added to Git (D47). Renovate does not auto-merge the Hermes digest. Gordon merges Hermes bump PRs. The code-factory deploy does not exist yet; this task covers the ops pin. The code-factory pin repeats the same pattern in p4b-05.
+Touches:     services/hermes/deploy/ops/ Flux dependency, services/hermes/tools/backup, services/hermes/Makefile, renovate.json
+Hard limits: R31; R33; R38. D69 (the backup command belongs to the Hermes add-on and meets the chat-bot slot’s backup term, not core tools/ or the root Makefile). The ops Kustomization depends on a VolSync backup triggered by the new digest. make -C services/hermes backup ENV=<env> quiesces or dumps SQLite first, runs one on-demand backup of the PVC and waits for it to finish, and leaves no manual trigger set on the generated source, because VolSync ignores the schedule while one is set; nothing is added to Git (D47). Renovate does not auto-merge the Hermes digest. Gordon merges Hermes bump PRs. The code-factory deploy does not exist yet; this task covers the ops pin. The code-factory pin repeats the same pattern in p4b-05.
 Done checks: A test bump PR shows auto-merge off, the backup Job complete for that digest before the rollout, and the evals passing against the deployed bot. One PR.
 ```
 
@@ -948,8 +950,8 @@ Goal:        After a pod restart, prove Git config was re-applied, and restore t
 Why:         Runtime edits must not survive a restart, and the Hermes volume needs its own restore drill (R12, R31).
 Advances:    P2 exit check: “After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.”
 Depends on:  p2-06b, p2-16, p0b-10
-Touches:     ops volume, tools/verify/
-Hard limits: R12; R31. D47. The restore is make restore ENV=<env> APP=hermes-ops (p0b-10), attached as its own run. ACCEPT_EMPTY and RETIRE are only valid with make restore-all, and this run does not lift the rebuild hold (D47). If the restored token is stale, Gordon redoes the device login (§8 custody) before chat is called again.
+Touches:     ops volume, services/hermes/verify/
+Hard limits: R12; R31. D47; D69 (the Hermes verify component). The restore is make restore ENV=<env> APP=hermes-ops (p0b-10), attached as its own run. ACCEPT_EMPTY and RETIRE are only valid with make restore-all, and this run does not lift the rebuild hold (D47). If the restored token is stale, Gordon redoes the device login (§8 custody) before chat is called again.
 Done checks: The log shows a planted runtime edit gone after restart, and the restored volume’s checksum matching the backup. One PR.
 ```
 
@@ -1000,8 +1002,8 @@ Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>
 Advances:    P2 exit check: “After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.”
 Advances:    P2 exit check: “admin-gate is the PR-risk check (R36); branch protection is optional and is not the deploy gate (D56): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Depends on:  p2-11, p2-15, p2-16, p2-17, p2-18, p2-19, p2-20, p2-21, p2-24
-Touches:     Makefile, tools/verify/
-Hard limits: R33; R35; R36; R38. D17; D61. This PR touches tools/verify/, so it waits for admin-approved. make verify reads standing state. The admin-gate seeds are seeded PRs, attached beside it, never inside the script. The [G] lines are concierge’s Telegram reply and the grok.com dashboard. Renovate auto-merge stays off; the owner merges every PR, including minor and patch bumps.
+Touches:     services/hermes/verify/
+Hard limits: R33; R35; R36; R38. D17; D61; D69. The standing checks go in the Hermes verify component, which make verify ENV= runs only when the env enables Hermes. This PR waits for admin-approved. make verify reads standing state. The admin-gate seeds are seeded PRs, attached beside it, never inside the script. The [G] lines are concierge’s Telegram reply and the grok.com dashboard. Renovate auto-merge stays off; the owner merges every PR, including minor and patch bumps.
 Done checks: make verify ENV=<env> exits 0 with the standing checks this phase adds (scripted prompts, dashboard login). The admin-gate seeds are seeded PRs attached beside it. Drills and evals (geo evals, memory, eval summary, degrade, bump, restore) are attached as their own runs. Owner checklist, pasted outside the script: Gordon’s Telegram [G] paste and the grok.com dashboard [G] paste. One PR.
 ```
 
@@ -1031,12 +1033,12 @@ No new §5 contract. The skill contract remains the one written in P2.
 
 ```text
 ID:          p3-00
-Goal:        Add make google-consent, the OAuth loopback flow on the controller.
-Why:         The Gmail and Calendar token has to be sealed before a bot reads mail (R15, R25).
+Goal:        Add google-consent to the Hermes add-on (make -C services/hermes google-consent ENV=<env>), the OAuth loopback flow on the controller.
+Why:         The Gmail and Calendar token has to be sealed before a bot reads mail (R15, R25). The command belongs to the Hermes add-on, not to core (D69).
 Advances:    P3 exit check: “The morning brief arrives at its scheduled time with calendar, email and weather (Open-Meteo, attributed; “weather unavailable” if it is down), and reaches Telegram [G].”
 Depends on:  p0a-04, p2-25
-Touches:     tools/google-consent, Makefile
-Hard limits: R15; R25. D40. Loopback flow on the controller. Scopes are gmail.readonly, gmail.compose, and calendar.readonly only. The token is written through make seal into SOPS, then into WORKSPACE_MCP_CREDENTIALS_DIR/<email>.json with USER_GOOGLE_EMAIL set. That credentials file stays writable so the server can refresh it.
+Touches:     services/hermes/tools/google-consent, services/hermes/Makefile
+Hard limits: R15; R25. D40; D69. Loopback flow on the controller. Scopes are gmail.readonly, gmail.compose, and calendar.readonly only. The token is written through make seal into SOPS, then into WORKSPACE_MCP_CREDENTIALS_DIR/<email>.json with USER_GOOGLE_EMAIL set. That credentials file stays writable so the server can refresh it.
 Done checks: A fixture loopback run seals a token whose scopes are only those three. One PR.
 ```
 
@@ -1144,8 +1146,8 @@ Advances:    P3 exit check: “Asked in chat to draft a reply to a seeded email,
 Advances:    P3 exit check: “An eval asserts no bot can send, delete, apply Gmail labels, write to calendar or reach Drive.”
 Advances:    P3 exit check: “A forced bot cron failure sends a Telegram alert without going through Hermes (a log-based Grafana alert on Hermes cron errors).”
 Depends on:  p3-04, p3-05, p3-06, p3-07
-Touches:     Makefile, tools/verify/
-Hard limits: R35; R36. D17. This PR touches tools/verify/ and waits for admin-approved. The [G] lines are the morning brief, the evening wrap, and the weekly review on Telegram.
+Touches:     services/hermes/verify/
+Hard limits: R35; R36. D17; D69. The standing checks go in the Hermes verify component. This PR waits for admin-approved. The [G] lines are the morning brief, the evening wrap, and the weekly review on Telegram.
 Done checks: make verify ENV=<env> exits 0 with the standing checks this phase adds. The brief runs, the stuck-update finding, the evals, the draft proof and the cron alert are attached as their own runs. Owner checklist, pasted outside the script: Gordon’s three Telegram [G] pastes. One PR.
 ```
 
@@ -1195,8 +1197,8 @@ Done checks: With apps.yaml empty, no app namespace exists. A fixture render wit
 
 ```text
 ID:          p4a-03
-Goal:        Have the ResourceSet write the app’s Gatus endpoint ConfigMap, and load it from a Gatus sidecar.
-Why:         A hosted app has to show up in Gatus without a hand-edited Gatus file (R5, §5).
+Goal:        When the observability add-on is enabled, have the ResourceSet write the app’s Gatus endpoint ConfigMap, and load it from a Gatus sidecar.
+Why:         A hosted app has to show up in Gatus without a hand-edited Gatus file (R5, §5). With observability off, app hosting writes no Gatus object (D69).
 Advances:    P4a exit check: “After Gordon adds one line to apps.yaml, the outside app deploys to its own namespace, is reachable at app-<name>.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-02, p1-08
 Touches:     platform/app-hosting/, services/observability/gatus/
@@ -1239,14 +1241,14 @@ Done checks: AGENTS.md is the only rule file in the repo and names the health pa
 
 ```text
 ID:          p4a-07
-Goal:        Extend make verify ENV= with the P4a standing checks (the app Ready, the LAN curl, and the Gatus row). The network-policy test, the seeded cluster-scoped failure, Gordon’s apps.yaml line and the tailnet check stay outside the script.
+Goal:        Extend make verify ENV= with the P4a standing checks (the app Ready, the LAN curl, and, when the observability add-on is enabled, the Gatus row). The network-policy test, the seeded cluster-scoped failure, Gordon’s apps.yaml line and the tailnet check stay outside the script.
 Why:         Done for the checkpoint is the attached verify output (§2). The line in apps.yaml is Gordon’s merge (R36).
 Advances:    P4a exit check: “After Gordon adds one line to apps.yaml, the outside app deploys to its own namespace, is reachable at app-<name>.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Advances:    P4a exit check: “A seeded jarvis-apps PR with a cluster-scoped object fails CI (R30).”
 Depends on:  p4a-03, p4a-04, p4a-05, p4a-06
 Touches:     the env-01 instance repo values/apps.yaml, tools/verify/
 Hard limits: R28; R30; R35; R36. D12 stays the platform fixture; the hosted app is app-demo. D17; D60. make verify reads standing state only. The network-policy test shows the app pod cannot reach Grafana, the ops API, DNS-to-core service ClusterIPs, or the node IP on 443 (Traefik). That test and the seeded cluster-scoped PR are their own runs, attached beside make verify, never inside the script. Tailnet reachability is the [G] check. Gordon’s apps.yaml merge in the instance repo is a Gordon-run step.
-Done checks: make verify ENV=<env> exits 0 with the app Ready in namespace app-demo, the LAN curl, and the Gatus row. The denied-egress log, including the node IP on 443, is its own run attached beside it. The seeded cluster-scoped failure is a seeded PR attached beside it. Owner checklist, pasted outside the script: Gordon’s tailnet [G] paste and his merged apps.yaml line. One PR.
+Done checks: make verify ENV=<env> exits 0 with the app Ready in namespace app-demo, the LAN curl, and, when observability is enabled, the Gatus row. The denied-egress log, including the node IP on 443, is its own run attached beside it. The seeded cluster-scoped failure is a seeded PR attached beside it. Owner checklist, pasted outside the script: Gordon’s tailnet [G] paste and his merged apps.yaml line. One PR.
 ```
 
 ### Exit checks
@@ -1466,8 +1468,8 @@ Advances:    P4b exit check: “Token scopes show no agent holds push credential
 Advances:    P4b exit check: “A forced timeout gets the issue the code-factory:failed label, and foreman says so.”
 Advances:    P4b exit check: “The code-factory App adding admin-approved fails admin-gate.”
 Depends on:  p4b-08, p4b-10, p4b-11, p4b-12, p4b-13, p4b-14
-Touches:     Makefile, tools/verify/
-Hard limits: R35; R36; R40; R42. D17. This PR touches tools/verify/ and waits for admin-approved. make verify reads standing state only. The family-seed failure is a seeded PR, attached beside it, never inside the script. Gordon applying code-factory:ready is a Gordon-run step.
+Touches:     the code-factory add-on’s verify component (its folder is set when its shape is decided at P4b)
+Hard limits: R35; R36; R40; R42. D17; D69. The standing checks go in the code-factory add-on’s verify component, which make verify ENV= runs only when the env enables it. This PR waits for admin-approved. make verify reads standing state only. The family-seed failure is a seeded PR, attached beside it, never inside the script. Gordon applying code-factory:ready is a Gordon-run step.
 Done checks: make verify ENV=<env> exits 0 with the standing checks this phase adds (the draft PR exists, and the token-scope output). The family-seed failure is a seeded PR attached beside it. The lane drills, including the rejected write to jarvis, are attached as their own runs. Owner checklist, pasted outside the script: Gordon applies code-factory:ready. One PR.
 ```
 
