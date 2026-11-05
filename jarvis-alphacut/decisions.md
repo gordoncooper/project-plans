@@ -2,7 +2,7 @@
 
 Defaults chosen where `framework.md` is silent. Merging this file accepts all defaults except those marked Confirmed by Gordon.
 
-Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. Confirmed by Gordon 2026-10-20: D3, D44. Confirmed by Gordon 2026-10-31: D17, D42, D43, D45, D46, D47. Confirmed by Gordon 2026-11-02: D48–D67. Confirmed by Gordon 2026-11-04: D68. The other entries are accepted-with-plan defaults.
+Confirmed by Gordon 2026-10-19: D1, D2, D4, D19, D21, D22, D24, D26, D27, D34, D38, D39, D40, D41. Confirmed by Gordon 2026-10-20: D3, D44. Confirmed by Gordon 2026-10-31: D17, D42, D43, D45, D46, D47. Confirmed by Gordon 2026-11-02: D48–D67. Confirmed by Gordon 2026-11-04: D68, D69. The other entries are accepted-with-plan defaults.
 
 These are the §11 defaults. They are recorded here. They are not copied into framework §10: this change adds only this file and `plan.md`.
 
@@ -52,13 +52,14 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 - Decision: §5 contract files live at these paths. Two contracts that share a folder are separate sections of that one `CONTRACT.md`. Component folders named in §6 still get their own `CONTRACT.md` when the component is built.
   - Env schema: `schema/CONTRACT.md` (repo-root `schema/` holds the env validator and its contract)
-  - Profile schema: its own `services/hermes/core/schema/CONTRACT.md`, created at `p2-04`
+  - Profile schema: its own `services/hermes/core/schema/CONTRACT.md`, created at `p2-04` (it stays with Hermes, D69)
   - Code delivery provider: `docs/code-delivery/CONTRACT.md`
   - Build agent: `docs/build-agent/CONTRACT.md`
   - Exposure: `platform/traefik/CONTRACT.md` (cert-manager and app-dns component contracts point at it)
   - Backups: `platform/backups/CONTRACT.md`
   - Login and alert path: `services/observability/CONTRACT.md`
-  - Model provider, assistant API, and skill contract: `services/hermes/core/CONTRACT.md`
+  - Chat-bot slot contract: `services/chat-bot/CONTRACT.md`. It covers hosting, storage, backups, secrets and URL/ingress, and holds the model provider, assistant API and skill contract sections (D69).
+  - Hermes core: `services/hermes/core/CONTRACT.md` says how Hermes meets the chat-bot slot. The profile schema and the deploy contracts below stay with Hermes.
   - Each Hermes deploy (`services/hermes/deploy/ops`, `services/hermes/deploy/code-factory`) is a component root; its `CONTRACT.md` lists the R13 egress hosts it uses.
   - Sandbox: `services/hermes/deploy/code-factory/sandbox/CONTRACT.md`
   - Code-factory work protocol: `services/hermes/deploy/code-factory/CONTRACT.md`
@@ -181,7 +182,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D24
 
-- Decision: during `make google-consent`, Gordon sends one message to himself with subject `jarvis-p3-seed`. The draft check uses that thread.
+- Decision: during the Hermes add-on’s `google-consent` (D69), Gordon sends one message to himself with subject `jarvis-p3-seed`. The draft check uses that thread.
 - Reason: the draft check needs a seeded thread. The Gmail token is read plus drafts, and the bot must not send (R15).
 - Where: `p3-06`, Gordon action for `p3-01a`.
 - Status: Confirmed by Gordon 2026-10-19.
@@ -293,7 +294,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D40
 
-- Decision: Gmail and Calendar tools come from workspace-mcp (taylorwilsdon/google_workspace_mcp, MIT), pinned workspace-mcp==2.1.1 via uvx with its uv cache on the deploy volume, single-user, stdio. inbox runs it with `--single-user --permissions gmail:drafts calendar:readonly` (the drafts level never registers send_gmail_message). concierge runs it with `--single-user --read-only --tools gmail calendar`. make google-consent writes the token file into WORKSPACE_MCP_CREDENTIALS_DIR/<email>.json (writable, the server refreshes it) with USER_GOOGLE_EMAIL set.
+- Decision: Gmail and Calendar tools come from workspace-mcp (taylorwilsdon/google_workspace_mcp, MIT), pinned workspace-mcp==2.1.1 via uvx with its uv cache on the deploy volume, single-user, stdio. inbox runs it with `--single-user --permissions gmail:drafts calendar:readonly` (the drafts level never registers send_gmail_message). concierge runs it with `--single-user --read-only --tools gmail calendar`. The Hermes add-on’s google-consent (D69) writes the token file into WORKSPACE_MCP_CREDENTIALS_DIR/<email>.json (writable, the server refreshes it) with USER_GOOGLE_EMAIL set.
 - Reason: most-used open-source Workspace MCP, local with Gordon’s own OAuth client, one flag removes send. Hermes’s bundled google-workspace skill needs the terminal tool and asks for send and Drive scopes.
 - Where: `p3-00`, `p3-01a`, `p3-01b`, `p3-05`.
 - Status: Confirmed by Gordon 2026-10-19.
@@ -433,8 +434,8 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D51
 
-- Decision: core (the `jarvis` repo, the k3s and Flux foundation, and the chat bot) is one trusted zone with a short credential list: the age key, the k3s server token (plus a separate agent token from the D2 rebuild rehearsal), one restic password and one storage login for all core backups, and the GitHub deploy key. Hosted apps from `jarvis-apps` are untrusted: each `app-<name>` namespace with data gets its own restic credential and its own private repository, before that app stores data. An app credential cannot read, write or prune any core repository, including the chat bot’s personal data, or another app’s.
-- Reason: core is trusted, so more core credentials add work without much safety; apps are the untrusted side, so their backups are kept apart from core and from each other.
+- Decision: the trusted zone is core (the `jarvis` repo’s k3s and Flux foundation, D69) plus the Jarvis add-ons, including the chat bot. It is one zone with a short credential list: the age key, the k3s server token (plus a separate agent token from the D2 rebuild rehearsal), one restic password and one storage login for all core backups, and the GitHub deploy key. Hosted apps from `jarvis-apps` are untrusted: each `app-<name>` namespace with data gets its own restic credential and its own private repository, before that app stores data. An app credential cannot read, write or prune any core repository, including the chat bot’s personal data, or another app’s.
+- Reason: core and its add-ons are trusted, so more credentials inside the zone add work without much safety; apps are the untrusted side, so their backups are kept apart from core and from each other.
 - Where: `p0b-09d`, `p0b-09e`, `p2-09`; framework R31, §5 Backups, §8.
 - Status: Confirmed by Gordon 2026-11-02.
 
@@ -555,4 +556,17 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 - Decision: moving env-01 to `gordoncooper/jarvis-internal` and rebuilding it fresh is one step (`p0b-13`). In it Flux deploys both sources from `main` with no signature check: the instance root over one read-only deploy key (D51), core with no credential. The signed-tag gate (D56: Flux `verify`, mode `Tag`, both sources, only Gordon’s keys) is a separate, later step (`p2-08a`). It lands after the foundation build and before the chat bot holds Gordon’s real data, so `p2-09`, the first real data volume, depends on it.
 - Reason: the move and the rebuild are a large change on their own; the gate only has to hold before real data arrives.
 - Where: `p0b-13`, `p2-08a`, `p2-09`; framework R7, R25, R33, R36, §1, §4, §5, §6, §8; D56, D60.
+- Status: Confirmed by Gordon 2026-11-04.
+
+## D69
+
+- Decision: core stands alone, Jarvis add-ons are optional, and the chat bot is a slot.
+  - Core stands alone. Core is the k3s and Flux foundation: nodes, k3s, Flux, certs, ingress, local DNS, backups, secrets and CI. It installs and runs as a general k3s foundation. An env with no add-ons enabled is fully healthy, and core health is `make verify`.
+  - Jarvis add-ons are optional. Add-ons are Jarvis-owned apps and services. They live in the `jarvis` repo under `services/`, are off by default, and each env enables them in its own instance repo.
+  - The chat bot is a slot. It sits behind a slot contract (`services/chat-bot/CONTRACT.md`, D7) covering hosting, storage, backups, secrets, URL/ingress, and later the assistant API and model provider. Hermes is its first implementation. Core and other add-ons depend on the slot, never on Hermes by name, so swapping Hermes replaces one add-on with no core edits. Tools and checks that serve Hermes (profile render, on-demand backup, Google consent, the Hermes verify checks) live in the add-on’s folder, and the verify checks run only when the env enables it.
+  - Observability (VictoriaMetrics, VictoriaLogs, Fluent Bit, vmagent, Grafana, Gatus, alerting) is an optional add-on, not core. A rule or step that uses it applies when the env enables it; core’s own health is `make verify`.
+  - The code factory is its own add-on. Its shape is decided at P4b.
+  - `jarvis-apps` stays the untrusted zone (D51, D63, R30).
+- Reason: core is useful on its own as a k3s foundation, and the chat-bot runtime may be replaced later.
+- Where: `p0a-04`, `p0b-01`, `p0b-06`, the P1 phase note, `p1-13`, `p2-01`, `p2-05`, `p2-07`, `p2-09`, `p2-12`, `p2-14`, `p2-18`, `p2-19`, `p2-20`, `p2-21`, `p2-25`, `p3-00`, `p3-08`, `p4a-03`, `p4a-07`, `p4b-15`; D7, D24, D40, D51; framework R1, R3, R5, R7, R8, §1, §2, §4, §5, §6, §8.
 - Status: Confirmed by Gordon 2026-11-04.
