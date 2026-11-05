@@ -145,7 +145,7 @@ Why:         Fix order (§11): the schema is the boundary; CI only runs it. This
 Advances:    P0a exit check: “One required check on main, ci, runs every ci/checks/ rule check (admin-gate joins at the P2 exit, R36), and a seeded bad PR fails each rule check as it lands (Examples: a hardcoded DNS suffix, a plaintext secret, a missing CONTRACT.md, a missing flux_git_repo_url, a deny list missing a whole deny class).”
 Depends on:  p0a-01, p0a-03, p0a-06
 Touches:     schema/, ci/checks/env-schema
-Hard limits: R3; R4; R10 (Python). D3; D34; D45; D54. Validates cluster-vars.yaml and inventory/hosts.yml for every env (§5). hermes.yaml, apps.yaml and build_agent are absent and are not validated here. Gordon may set branch protection requiring ci after p0a-06 merges; paid protection is not the deploy gate (D56). code_delivery, apps_git_repo_url, llm_provider_host and hermes.* are absent (D45). dns_suffix and flux_git_repo_url are required. The defaults for ssh_user, local_path_data and backup_path live only here. Core naming an env, a model, or a DNS suffix is p0a-07. The per-node inventory shape is p0a-11a. No cross-env owner-handle match (D55).
+Hard limits: R3; R4; R10 (Python). D3; D34; D45; D54. Validates cluster-vars.yaml and inventory/hosts.yml for every env (§5). hermes.yaml, apps.yaml and build_agent are absent and are not validated here. Gordon may set branch protection requiring ci after p0a-06 merges; paid protection is not the deploy gate (D56). code_delivery, apps_git_repo_url, llm_provider_host and hermes.* are absent (D45). dns_suffix and flux_git_repo_url are required. The defaults for ssh_user, local_path_data and backup_path live only here. Core naming an env, a model, or a DNS suffix is p0a-07. The per-node inventory shape is p0a-11a. No cross-env owner-handle match (D55). Follow-ups from jarvis #177: the schema refuses the sample add-on (hello) in any env but the example env; and an env-level rule makes every stage Kustomization substitute only from cluster-vars.
 Done checks: pytest covers a valid env-01 with hermes.yaml, apps.yaml and build_agent absent, and ssh_user defaulting to ubuntu. A seeded PR that omits flux_git_repo_url fails ci. One PR.
 ```
 
@@ -525,7 +525,7 @@ Why:         Instance data must live in the private instance repo before the cha
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no app credential opens a core repository (R31, D48, D51).”
 Depends on:  p0b-12
 Touches:     infra/ansible/roles/flux-operator, the env-01 instance repo
-Hard limits: R1; R25; R34. D49; D51; D57; D60; D68. Flux reads the instance root with one read-only deploy key (D51) and core with no credential, both at main, with no signature check; the gate is p2-08a. env-01 is rebuilt fresh from the instance repo, not migrated in place. The rebuild is the D49 rehearsal: a k3s uninstall and reinstall with the OS and /var/lib/jarvis kept. The new cluster starts from an empty etcd datastore and restores no snapshot, and Git rebuilds everything. The CA is minted fresh with name constraints (D57). The agent token is rotated to its own value. The sealed server token is kept in the short, passphrase-only form: a K10<ca-hash>::server:<passphrase> token carries the old CA’s hash and fails on a fresh CA. The passphrase is unchanged, so older etcd snapshots stay restorable. The restic password, the rest-server login and the off-host credentials move unchanged. bench is test-only; its data disk holds only test data and is never wiped without the owner’s explicit say-so. After this step, later-phase instance writes (p2-07, p2-10, P4a apps.yaml) go to the instance repo.
+Hard limits: R1; R25; R34. D49; D51; D57; D60; D68. Flux reads the instance root with one read-only deploy key (D51) and core with no credential, both at main, with no signature check; the gate is p2-08a. env-01 is rebuilt fresh from the instance repo, not migrated in place. The rebuild is the D49 rehearsal: a k3s uninstall and reinstall with the OS and /var/lib/jarvis kept. The new cluster starts from an empty etcd datastore and restores no snapshot, and Git rebuilds everything. The CA is minted fresh with name constraints (D57). The agent token is rotated to its own value. The sealed server token is kept in the short, passphrase-only form: a K10<ca-hash>::server:<passphrase> token carries the old CA’s hash and fails on a fresh CA. The passphrase is unchanged, so older etcd snapshots stay restorable. The restic password, the rest-server login and the off-host credentials move unchanged. bench is test-only; its data disk holds only test data and is never wiped without the owner’s explicit say-so. After this step, later-phase instance writes (p2-07, p2-10, P4a apps.yaml) go to the instance repo. Follow-up from jarvis #177: once the env is rebuilt, run the add-on disable test live on a scratch env (enable the sample add-on, disable it, confirm its Kustomizations are gone and its namespace, tenant account and secrets stay until deleted by hand); it is an owner run.
 Done checks: Both GitRepositories are Ready at main. env-01 is Ready from the instance repo after the rebuild, started from an empty etcd datastore; that rebuild is the dead-node rehearsal (owner’s go, OS and /var/lib/jarvis kept, D49). The sealed server token is the short form, and the fresh CA carries the name constraint. One PR.
 ```
 
@@ -564,7 +564,7 @@ Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert wi
 Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p0b-13
 Touches:     services/observability/CONTRACT.md
-Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 80%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18).
+Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 80%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18). Follow-up from jarvis #177: before observability lands, move the core `backup: none` entries for observability volumes out of core and into an add-on contract field, so core names no add-on.
 Done checks: The Login section and the Alert path section each have Offers, Expects, Health, Config, and Proven by, naming checks without plan codes. One PR.
 Proven by:   The R27 CI check and the dashboard-login check (§5). Grafana anonymous-off is one half. The kill-endpoint alert, the lowered-threshold alerts, and the backup-failure alert.
 ```
@@ -692,7 +692,7 @@ Advances:    P1 exit check: “Gatus checks every exposed endpoint; its status p
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
 Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p1-11, p1-12, p1-08
-Touches:     services/observability/verify/ (the observability verify component)
+Touches:     services/observability/verify.py (the observability verify component)
 Hard limits: R8; R35. D17; D69 (the component runs only when the env enables observability). The tailnet Gatus load is the [G] line.
 Done checks: make verify ENV=<env> exits 0 with dashboard evidence and the Gatus page. The alert proofs are attached as their own drills. Owner checklist, pasted outside the script: Gordon’s tailnet [G] paste. One PR.
 ```
@@ -722,8 +722,8 @@ Advances:    P2 exit check: “Memory: a fact is recalled after a pod restart in
 Advances:    P2 exit check: “Weather and distance questions get correct answers through the geo MCP server (weather: Open-Meteo; distance: Nominatim plus the OSRM demo, typical drive time) with attribution; the geo tool’s evals in concierge pass.”
 Advances:    P3 exit check: “An eval asserts no bot can send, delete, apply Gmail labels, write to calendar or reach Drive.”
 Depends on:  p1-13
-Touches:     services/chat-bot/CONTRACT.md, services/hermes/core/CONTRACT.md
-Hard limits: R13; R15; R16; R17; R18; R23; R27. D7; D66; D69. The three sections live in services/chat-bot/CONTRACT.md (hosting, storage, backups, secrets and URL/ingress are the slot’s other sections); services/hermes/core/CONTRACT.md holds only how Hermes meets the slot and no model-provider, assistant-API or skill-contract text. The profile schema and the deploy contracts stay with Hermes. Hermes’s model login is a swappable provider (subscription login, a local model, or an API key); env-01’s first login is xai-oauth. A local LLM or a gateway is another base_url and is not built (§9). Paths are / for the dashboard and /api/<profile>/v1 per profile. /v1/audio/* is reserved and this task adds no audio handler; the GPU runtime and HTTPS path land now so a first voice version over HTTPS fits later (D62). Memory export produces a file. MCP servers run inside the deploy pod, pinned, no sidecars. Write tools run only behind a confirm step. This plan’s writes are inbox drafts and spec-writer’s issues. The geo section records the Nominatim policy decision: at most 1 request per second, cache, User-Agent with Gordon’s contact email, attribution, home taken from SOPS and never looked up.
+Touches:     services/slots/chat-bot/CONTRACT.md, services/hermes/core/CONTRACT.md
+Hard limits: R13; R15; R16; R17; R18; R23; R27. D7; D66; D69. The three sections live in services/slots/chat-bot/CONTRACT.md (hosting, storage, backups, secrets and URL/ingress are the slot’s other sections); services/hermes/core/CONTRACT.md holds only how Hermes meets the slot and no model-provider, assistant-API or skill-contract text. The profile schema and the deploy contracts stay with Hermes. Hermes’s model login is a swappable provider (subscription login, a local model, or an API key); env-01’s first login is xai-oauth. A local LLM or a gateway is another base_url and is not built (§9). Paths are / for the dashboard and /api/<profile>/v1 per profile. /v1/audio/* is reserved and this task adds no audio handler; the GPU runtime and HTTPS path land now so a first voice version over HTTPS fits later (D62). Memory export produces a file. MCP servers run inside the deploy pod, pinned, no sidecars. Write tools run only behind a confirm step. This plan’s writes are inbox drafts and spec-writer’s issues. The geo section records the Nominatim policy decision: at most 1 request per second, cache, User-Agent with Gordon’s contact email, attribution, home taken from SOPS and never looked up.
 Done checks: The three sections each have Offers, Expects, Health, Config, and Proven by, naming checks without plan codes, including the Nominatim decision. One PR.
 Proven by:   The fallback check, Gatus provider reachability, and the R23 CI grep (§5). The scripted-prompt check and the memory-export check (§5). The R16 pin and tag check, the R13 toolset policy check, and the no-write eval (§5).
 ```
@@ -872,8 +872,8 @@ Goal:        Route /api/<profile>/v1 to each bot and run the scripted non-error 
 Why:         The assistant API is the only supported way to talk to a bot (R17).
 Advances:    P2 exit check: “A scripted prompt through the assistant API (/api/<profile>/v1) to each of the three bots gets a non-error answer; a Telegram message from Gordon’s ID to concierge gets a reply [G], and one from another ID gets none.”
 Depends on:  p2-10, p2-13
-Touches:     services/hermes/deploy/ops/ routing, services/hermes/verify/
-Hard limits: R17; D69. The API requires the deploy API key. The three profile names are concierge, inbox, and homelab. The check is part of the Hermes verify component in services/hermes/verify/, which make verify ENV= runs only when the env enables Hermes; core tools/verify/ gains no Hermes check.
+Touches:     services/hermes/deploy/ops/ routing, services/hermes/verify.py
+Hard limits: R17; D69. The API requires the deploy API key. The three profile names are concierge, inbox, and homelab. The check is part of the Hermes verify component in services/hermes/verify.py, which make verify ENV= runs only when the env enables Hermes; core tools/verify/ gains no Hermes check.
 Done checks: A scripted prompt to each of the three URLs returns a non-error answer. One PR.
 ```
 
@@ -917,7 +917,7 @@ Why:         A dead provider has to show an error within about 30 seconds instea
 Advances:    P2 exit check: “Each bot’s evals (≥3) pass against the deployed bots (the eval run attached beside make verify ENV=<env>, R38); usage is readable in Hermes analytics and the grok.com dashboard [G]; with the subscription login revoked or capped (a 401 test fixture stands in; the real login stays signed in), the dashboard and Telegram show an error within ~30 s and the eval run fails (R18).”
 Advances:    P2 exit check: “With the primary model blocked, chat answers from the fallback model; with the provider blocked, the dashboard and Telegram show an error within 30 s and Gatus flags it (R18).”
 Depends on:  p2-13, p2-15, p2-17, p1-08
-Touches:     Gatus provider check (observability add-on), services/hermes/verify/, llm_provider_host in the env schema, env-01 and env-00
+Touches:     Gatus provider check (observability add-on), services/hermes/verify.py, llm_provider_host in the env schema, env-01 and env-00
 Hard limits: R8; R18. D19; D20; D39; D45 (llm_provider_host, read by Hermes and the Gatus provider probe, so one override trips both). The capped-login drill is a 401 fixture. The real login stays signed in. The drills restore xai-oauth before the task ends. Hosts in the contract are documentation. This step adds validation of llm_provider_host (D45). The drills are their own runs.
 Done checks: The log shows a fallback-model answer, a dashboard error within 30 seconds when the provider host is overridden, the same dashboard error within about 30 seconds for the 401 fixture, and the eval run failing during that window and passing after restore. Owner checklist: Gordon’s paste from a Telegram message he sends during the drill (D17). One PR.
 ```
@@ -928,7 +928,7 @@ Goal:        Record usage from Hermes analytics and the grok.com confirmation li
 Why:         Subscription use has to be visible per bot and on the subscription dashboard (R23).
 Advances:    P2 exit check: “Each bot’s evals (≥3) pass against the deployed bots (the eval run attached beside make verify ENV=<env>, R38); usage is readable in Hermes analytics and the grok.com dashboard [G]; with the subscription login revoked or capped (a 401 test fixture stands in; the real login stays signed in), the dashboard and Telegram show an error within ~30 s and the eval run fails (R18).”
 Depends on:  p2-14, p2-17
-Touches:     services/hermes/verify/
+Touches:     services/hermes/verify.py
 Hard limits: R23. D18; D69 (the Hermes verify component). No usage data is copied into Git.
 Done checks: The verify log quotes a non-empty Hermes analytics usage field. The grok.com dashboard line is a [G] owner checklist item (D17). One PR.
 ```
@@ -950,7 +950,7 @@ Goal:        After a pod restart, prove Git config was re-applied, and restore t
 Why:         Runtime edits must not survive a restart, and the Hermes volume needs its own restore drill (R12, R31).
 Advances:    P2 exit check: “After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.”
 Depends on:  p2-06b, p2-16, p0b-10
-Touches:     ops volume, services/hermes/verify/
+Touches:     ops volume, services/hermes/verify.py
 Hard limits: R12; R31. D47; D69 (the Hermes verify component). The restore is make restore ENV=<env> APP=hermes-ops (p0b-10), attached as its own run. ACCEPT_EMPTY and RETIRE are only valid with make restore-all, and this run does not lift the rebuild hold (D47). If the restored token is stale, Gordon redoes the device login (§8 custody) before chat is called again.
 Done checks: The log shows a planted runtime edit gone after restart, and the restored volume’s checksum matching the backup. One PR.
 ```
@@ -1002,7 +1002,7 @@ Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>
 Advances:    P2 exit check: “After a pod restart, Git config is re-applied; restoring the Hermes volume from backup works.”
 Advances:    P2 exit check: “admin-gate is the PR-risk check (R36); branch protection is optional and is not the deploy gate (D56): seeded PRs that change a protected path or remove a Namespace fail it without the label and when admin-approved comes from gordon5417-ai or a fixture Bot/App actor, and pass once Gordon’s own account adds it after the latest commit; a seeded PR fails the render check (a stale Hermes render, R4).”
 Depends on:  p2-11, p2-15, p2-16, p2-17, p2-18, p2-19, p2-20, p2-21, p2-24
-Touches:     services/hermes/verify/
+Touches:     services/hermes/verify.py
 Hard limits: R33; R35; R36; R38. D17; D61; D69. The standing checks go in the Hermes verify component, which make verify ENV= runs only when the env enables Hermes. This PR waits for admin-approved. make verify reads standing state. The admin-gate seeds are seeded PRs, attached beside it, never inside the script. The [G] lines are concierge’s Telegram reply and the grok.com dashboard. Renovate auto-merge stays off; the owner merges every PR, including minor and patch bumps.
 Done checks: make verify ENV=<env> exits 0 with the standing checks this phase adds (scripted prompts, dashboard login). The admin-gate seeds are seeded PRs attached beside it. Drills and evals (geo evals, memory, eval summary, degrade, bump, restore) are attached as their own runs. Owner checklist, pasted outside the script: Gordon’s Telegram [G] paste and the grok.com dashboard [G] paste. One PR.
 ```
@@ -1146,7 +1146,7 @@ Advances:    P3 exit check: “Asked in chat to draft a reply to a seeded email,
 Advances:    P3 exit check: “An eval asserts no bot can send, delete, apply Gmail labels, write to calendar or reach Drive.”
 Advances:    P3 exit check: “A forced bot cron failure sends a Telegram alert without going through Hermes (a log-based Grafana alert on Hermes cron errors).”
 Depends on:  p3-04, p3-05, p3-06, p3-07
-Touches:     services/hermes/verify/
+Touches:     services/hermes/verify.py
 Hard limits: R35; R36. D17; D69. The standing checks go in the Hermes verify component. This PR waits for admin-approved. The [G] lines are the morning brief, the evening wrap, and the weekly review on Telegram.
 Done checks: make verify ENV=<env> exits 0 with the standing checks this phase adds. The brief runs, the stuck-update finding, the evals, the draft proof and the cron alert are attached as their own runs. Owner checklist, pasted outside the script: Gordon’s three Telegram [G] pastes. One PR.
 ```
@@ -1468,8 +1468,8 @@ Advances:    P4b exit check: “Token scopes show no agent holds push credential
 Advances:    P4b exit check: “A forced timeout gets the issue the code-factory:failed label, and foreman says so.”
 Advances:    P4b exit check: “The code-factory App adding admin-approved fails admin-gate.”
 Depends on:  p4b-08, p4b-10, p4b-11, p4b-12, p4b-13, p4b-14
-Touches:     the code-factory add-on’s verify component, if it has one: under its services/<name>/verify/ (the add-on’s shape is decided at P4b)
-Hard limits: R35; R36; R40; R42. D17; D69. If the code-factory add-on has a verify component, it lives under its services/<name>/verify/ and make verify ENV= runs it only when the env enables the add-on. services/*/verify/ is an R36 protected path, so this PR waits for admin-approved. make verify reads standing state only. The family-seed failure is a seeded PR, attached beside it, never inside the script. Gordon applying code-factory:ready is a Gordon-run step.
+Touches:     the code-factory add-on’s verify component, if it has one: services/<name>/verify.py (the add-on’s shape is decided at P4b)
+Hard limits: R35; R36; R40; R42. D17; D69. If the code-factory add-on has a verify component, it is services/<name>/verify.py and make verify ENV= runs it only when the env enables the add-on. services/ is an R36 protected path, so this PR waits for admin-approved. make verify reads standing state only. The family-seed failure is a seeded PR, attached beside it, never inside the script. Gordon applying code-factory:ready is a Gordon-run step.
 Done checks: make verify ENV=<env> exits 0 with the standing checks this phase adds (the draft PR exists, and the token-scope output). The family-seed failure is a seeded PR attached beside it. The lane drills, including the rejected write to jarvis, are attached as their own runs. Owner checklist, pasted outside the script: Gordon applies code-factory:ready. One PR.
 ```
 
