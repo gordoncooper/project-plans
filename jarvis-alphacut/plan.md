@@ -1468,8 +1468,8 @@ Advances:    P4b exit check: “Token scopes show no agent holds push credential
 Advances:    P4b exit check: “A forced timeout gets the issue the code-factory:failed label, and foreman says so.”
 Advances:    P4b exit check: “The code-factory App adding admin-approved fails admin-gate.”
 Depends on:  p4b-08, p4b-10, p4b-11, p4b-12, p4b-13, p4b-14
-Touches:     the code-factory add-on’s verify component (its folder is set when its shape is decided at P4b)
-Hard limits: R35; R36; R40; R42. D17; D69. The standing checks go in the code-factory add-on’s verify component, which make verify ENV= runs only when the env enables it. This PR waits for admin-approved. make verify reads standing state only. The family-seed failure is a seeded PR, attached beside it, never inside the script. Gordon applying code-factory:ready is a Gordon-run step.
+Touches:     the code-factory add-on’s verify component, if it has one: under its services/<name>/verify/ (the add-on’s shape is decided at P4b)
+Hard limits: R35; R36; R40; R42. D17; D69. If the code-factory add-on has a verify component, it lives under its services/<name>/verify/ and make verify ENV= runs it only when the env enables the add-on. services/*/verify/ is an R36 protected path, so this PR waits for admin-approved. make verify reads standing state only. The family-seed failure is a seeded PR, attached beside it, never inside the script. Gordon applying code-factory:ready is a Gordon-run step.
 Done checks: make verify ENV=<env> exits 0 with the standing checks this phase adds (the draft PR exists, and the token-scope output). The family-seed failure is a seeded PR attached beside it. The lane drills, including the rejected write to jarvis, are attached as their own runs. Owner checklist, pasted outside the script: Gordon applies code-factory:ready. One PR.
 ```
 
