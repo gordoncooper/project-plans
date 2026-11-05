@@ -56,7 +56,7 @@ One list, from §8. Each action names the task that waits on it.
 - P4: create the Cursor user API key. Task: p4b-06a.
 - P4: set Cursor billing to auto top-up off with a monthly limit (on the plan tier that includes Claude for code-factory:hard). Task: p4b-06a.
 - P4: create the GitHub App by hand from its four-permission checklist (contents, pull requests, issues, checks; no manifest flow). Task: p4b-06b.
-- P4a: merge the app’s line in the instance repo’s apps.yaml. Task: p4a-07.
+- P4a: merge the app’s name into the env’s apps list in the instance repo’s apps.yaml. Task: p4a-07.
 - P4a: set its GHCR package to public on first publish. Task: p4a-04.
 - P4b: apply code-factory:ready. Task: p4b-11.
 - P4b: merge code-factory PRs. Task: p4b-11.
@@ -370,7 +370,7 @@ Why:         The test app’s cert has to come from the internal CA, and rebuild
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-03
 Touches:     platform/cert-manager/controller, platform/cert-manager/config, platform/kustomization.yaml, platform/flux-operator/kustomization.yaml, envs/<env>/flux/kustomizations/platform-controllers.yaml, ci/tests/test_traefik.py, ci/tests/test_backup_enrollment.py, ci/tests/test_prune_guards.py, tools/bootstrap-secrets, envs/<env>/ca.crt, platform/traefik/CONTRACT.md, renovate.json
-Hard limits: R1; R5; R25; R28; R33. D5. The root key is a SOPS secret from make bootstrap-secrets, run on the controller by Gordon or the agent user (D17): the script generates the key and encrypts it to the .sops.yaml recipient in one step. The goal is to keep the plaintext key out of the repo, logs and anything persistent: bootstrap pipes it straight into sops where that is small, and otherwise uses 0600 temp files it deletes right away. The public root is plain text for Gatus and for devices: bootstrap-secrets also writes it to envs/<env>/ca.crt and never writes the key there. It is idempotent and never rewrites an existing CA or root file. With a new CA it writes the root as it generates the CA, which needs only the public recipient, so the agent user can run it. When the CA secret already exists and the root file does not, it decrypts only tls.crt in memory; that needs the age key, so that one run is an owner run (D17). The CA lifetime is 10 years. A new env’s CA is name-constrained to its DNS suffix (D57); an existing CA gains the constraint at its next planned rotation. Gordon keeps the calendar reminder (§8 custody). The CA sets its extensions explicitly through its own openssl config, not the host’s defaults: basicConstraints critical, CA:true, pathlen:0; keyUsage critical, keyCertSign and cRLSign; and a subject key identifier, so strict X.509 clients (openssl -verify_return_error, Python ssl) accept it. Tools refuse a path that would replace the CA. cert-manager does not reissue on a CA change, so a CA rotation deletes the wildcard’s TLS Secret to force the reissue. cert-manager’s namespace, HelmRepository and HelmRelease carry Flux’s prune: disabled (R1), and ci/tests/test_prune_guards.py lists every guarded platform object; each later platform controller adds its objects there. D30. The controller index moves out of platform/flux-operator/kustomization.yaml into platform/kustomization.yaml, so the flux-operator folder keeps only the operator; the platform-controllers Flux Kustomization path becomes ./platform, and cert-manager joins the list as one line. ci/tests/test_traefik.py follows the move to platform/. The bundled Traefik chart version is set only by the k3s pin, so a k3s bump can silently break the HelmChartConfig’s assumptions. The Traefik CONTRACT.md records the chart version and the k3s version it was checked against, and a ci test fails when an env’s k3s_version differs from that k3s version, so a k3s bump PR re-checks platform/traefik and updates the line. Renovate does not manage k3s (D5), so its disabled k3s rule only names that re-check in its description; no prBodyNotes, which a disabled rule never shows.
+Hard limits: R1; R5; R25; R28; R33. D5. The root key is a SOPS secret from make bootstrap-secrets, run on the controller by Gordon or the agent user (D17): the script generates the key and encrypts it to the .sops.yaml recipient in one step. The goal is to keep the plaintext key out of the repo, logs and anything persistent: bootstrap pipes it straight into sops where that is small, and otherwise uses 0600 temp files it deletes right away. The public root is plain text for Gatus and for devices: bootstrap-secrets also writes it to envs/<env>/ca.crt and never writes the key there. It is idempotent and never rewrites an existing CA or root file. With a new CA it writes the root as it generates the CA, which needs only the public recipient, so the agent user can run it. When the CA secret already exists and the root file does not, it decrypts only tls.crt in memory; that needs the age key, so that one run is an owner run (D17). The CA lifetime is 10 years. A new env’s CA is name-constrained to its DNS suffix (D57); an existing CA gains the constraint at its next planned rotation. Gordon keeps the calendar reminder (§8 custody). The CA sets its extensions explicitly through its own openssl config, not the host’s defaults: basicConstraints critical, CA:true, pathlen:0; keyUsage critical, keyCertSign and cRLSign; and a subject key identifier, so strict X.509 clients (openssl -verify_return_error, Python ssl) accept it. Tools refuse a path that would replace the CA. cert-manager does not reissue on a CA change, so a CA rotation deletes each wildcard’s TLS Secret (the apps wildcard’s too, when app hosting is on) to force the reissue. cert-manager’s namespace, HelmRepository and HelmRelease carry Flux’s prune: disabled (R1), and ci/tests/test_prune_guards.py lists every guarded platform object; each later platform controller adds its objects there. D30. The controller index moves out of platform/flux-operator/kustomization.yaml into platform/kustomization.yaml, so the flux-operator folder keeps only the operator; the platform-controllers Flux Kustomization path becomes ./platform, and cert-manager joins the list as one line. ci/tests/test_traefik.py follows the move to platform/. The bundled Traefik chart version is set only by the k3s pin, so a k3s bump can silently break the HelmChartConfig’s assumptions. The Traefik CONTRACT.md records the chart version and the k3s version it was checked against, and a ci test fails when an env’s k3s_version differs from that k3s version, so a k3s bump PR re-checks platform/traefik and updates the line. Renovate does not manage k3s (D5), so its disabled k3s rule only names that re-check in its description; no prBodyNotes, which a disabled rule never shows.
 Done checks: A Certificate for *.<DNS suffix> (env-01: *.alpha.lan) is Ready and the cert chains to the committed root, which openssl verify accepts with -x509_strict. The default TLSStore sits next to that Certificate in the platform-cert-manager namespace, so kube-system keeps only the HelmChartConfig. After merge, every Kustomization is Ready, and the rendered objects for the Flux Operator, Traefik and VolSync are unchanged apart from cert-manager. A seeded k3s_version bump without a Traefik CONTRACT.md update fails ci. The k3s Renovate rule’s description names the re-check. The live checks (Certificate Ready, every Kustomization Ready) are a post-merge drill step, not something the coding agent proves. One PR.
 ```
 
@@ -1166,18 +1166,18 @@ Done = attached make verify ENV=<env> output, plus this phase’s drills and eva
 
 ## P4a
 
-Goal: one apps.yaml line in the instance repo deploys an outside app, isolated from JARVIS.
+Goal: with app hosting on, one name in the env’s apps list deploys an outside app, isolated from JARVIS, from that app’s one app file.
 
 ### Contracts
 
 ```text
 ID:          p4a-01
 Goal:        Write the App hosting CONTRACT.md with proven by.
-Why:         One apps.yaml line is the whole enable path, and the contract comes before the ResourceSet (§5, R30).
-Advances:    P4a exit check: “After Gordon adds one line to apps.yaml, the outside app deploys to its own namespace, is reachable at app-<name>.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
+Why:         One name in the env’s apps list is the whole enable path once app hosting is on, and the contract comes before the wiring (§5, R30, D70).
+Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p2-25
 Touches:     platform/app-hosting/CONTRACT.md
-Hard limits: R4; R30. D7; D63. The contract covers namespace, quota, default-deny, service account, per-namespace GitRepository, impersonated Kustomization, and the Gatus ConfigMap. Hosted apps are stateless by default; stateful apps are allowed, with backup enrollment, once that app has its own backup credential (D51). An env can leave app hosting off. apps.yaml is re-added in the instance repo (D54, D60).
+Hard limits: R4; R30. D7; D63; D70. The contract covers the app file (a field table: required and optional fields, defaults, per-env differences, and the risky items that need an env exception line), namespace, quota, default-deny, service account, per-namespace GitRepository, impersonated Kustomization, the address <name>.apps.<DNS suffix>, and the Gatus ConfigMap. Defaults: 512Mi, 0.5 CPU, no internet, no traffic to other apps, extra ports in-cluster only. Hosted apps are stateless by default; stateful apps are allowed, with backup enrollment, once that app has its own backup credential (D51); a volume may be marked not backed up. App hosting is optional and off by default; an env turns it on with one line in its repo, and with it off the env gets none of the app pieces. apps.yaml is re-added in the instance repo and lists names only (D54, D60).
 Done checks: CONTRACT.md has Offers, Expects, Health, Config, and Proven by, naming checks without plan codes. One PR.
 Proven by:   The reachability, Gatus, and network-policy checks, and the seeded cluster-scoped PR (R30).
 ```
@@ -1186,34 +1186,34 @@ Proven by:   The reachability, Gatus, and network-policy checks, and the seeded 
 
 ```text
 ID:          p4a-02
-Goal:        Add the app-hosting ResourceSet fed by apps.yaml, with app hosting still off on env-01.
-Why:         Fix order (§11): one line in apps.yaml is the easy path; CI rejects the dangerous objects later (R30, R4).
-Advances:    P4a exit check: “After Gordon adds one line to apps.yaml, the outside app deploys to its own namespace, is reachable at app-<name>.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
+Goal:        Add the app-hosting wiring, fed by the env’s apps list and each app’s app file, with app hosting still off on env-01.
+Why:         Fix order (§11): one name in the env’s apps list is the easy path; the cluster refuses what the app file and the env’s exception lines do not allow, and CI rejects the dangerous objects later (R30, R4, D70).
+Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-01, p0a-05
 Touches:     platform/app-hosting/, env schema apps.yaml rules
-Hard limits: R1; R4; R30. D30 for the quota map: small is 512Mi and 0.5 CPU, medium is 2Gi and 1 CPU (§7). D54; D60; D63. apps.yaml is re-added in the instance repo. Each app’s GitRepository URL comes from apps_git_repo_url (D45). This step adds the key and its validation. No cross-namespace source refs. Flux may use an optional pull secret (D56). No pull secret for public GHCR. The env schema accepts hosting on or off. Stateful apps are allowed only with backup enrollment.
-Done checks: With apps.yaml empty, no app namespace exists. A fixture render with one line produces the namespace, quota, default-deny policy, service account, GitRepository, and impersonated Kustomization. One PR.
+Hard limits: R1; R4; R30. D30 for the default size: 512Mi and 0.5 CPU, unless the app file sets its own (§7). D54; D60; D63; D70. apps.yaml is re-added in the instance repo and holds app names and exception lines only: no settings per app, and no per-env on/off in the app file. A missing or empty list means no apps. Each app’s GitRepository URL comes from apps_git_repo_url (D45). This step adds the key and its validation. No cross-namespace source refs. Flux may use an optional pull secret (D56). No pull secret for public GHCR. The env schema accepts app hosting on or off (one line, off by default). The cluster, not CI, enforces the app file: an app with no valid app file fails closed, the object matches the file, and a risky item (privileged mode, host access, a custom address outside .apps, a port open to the home network) passes only with an ask in the app file and a matching exception line in the env’s repo. An app cannot take a core or add-on name, and no add-on may be named apps. Stateful apps are allowed only with backup enrollment.
+Done checks: With app hosting off, or with apps.yaml empty or missing, no app namespace exists. A fixture render with one listed name produces the namespace, quota, default-deny policy, service account, GitRepository, and impersonated Kustomization. A listed name with no valid app file deploys nothing. A risky item without both the ask and the exception line is refused. One PR.
 ```
 
 ```text
 ID:          p4a-03
-Goal:        When the observability add-on is enabled, have the ResourceSet write the app’s Gatus endpoint ConfigMap, and load it from a Gatus sidecar.
+Goal:        When the observability add-on is enabled, have the app wiring write the app’s Gatus endpoint ConfigMap, and load it from a Gatus sidecar.
 Why:         A hosted app has to show up in Gatus without a hand-edited Gatus file (R5, §5). With observability off, app hosting writes no Gatus object (D69).
-Advances:    P4a exit check: “After Gordon adds one line to apps.yaml, the outside app deploys to its own namespace, is reachable at app-<name>.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
+Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-02, p1-08
 Touches:     platform/app-hosting/, services/observability/gatus/
 Hard limits: R5. The ConfigMap is labeled in the observability namespace. The sidecar is the same pattern Grafana uses for dashboards.
-Done checks: A fixture app line produces a Gatus check for app-<name>.alpha.lan. One PR.
+Done checks: A fixture listed app produces a Gatus check for <name>.apps.alpha.lan. One PR.
 ```
 
 ```text
 ID:          p4a-04
-Goal:        Add apps/demo, its Dockerfile, and the jarvis-apps GHCR build.
+Goal:        Add demo/ (its app file, Dockerfile and deploy/) and the jarvis-apps GHCR build.
 Why:         P4a needs one real app whose image CI publishes as a public GHCR package (§4, R30).
-Advances:    P4a exit check: “After Gordon adds one line to apps.yaml, the outside app deploys to its own namespace, is reachable at app-<name>.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
+Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-02
-Touches:     jarvis-apps/apps/demo/, jarvis-apps/.github/workflows/build.yml, platform/app-hosting/CONTRACT.md
-Hard limits: R5; R10 (Python); R33 (digest). D25; D35. app.yaml holds source, port, and health path only. deploy/ holds namespaced objects only. The image is a public package; Gordon sets the package public on first publish. build.yml is no longer marked planned in the app-hosting contract.
+Touches:     jarvis-apps/demo/, jarvis-apps/.github/workflows/build.yml, platform/app-hosting/CONTRACT.md
+Hard limits: R5; R10 (Python); R33 (digest). D25; D35; D70. demo/app.yaml is the app’s one app file: its name matches the folder, and it defines everything about the app, including per-env differences (source, port, health path, size, network needs, volumes and any risky-item asks). An app with no valid app file fails closed. deploy/ holds namespaced objects only. The image is a public package; Gordon sets the package public on first publish. build.yml is no longer marked planned in the app-hosting contract.
 Done checks: build.yml publishes the image. The deploy manifests pin a digest. /health answers in a local container run. One PR.
 ```
 
@@ -1225,35 +1225,35 @@ Advances:    P4a exit check: “A seeded jarvis-apps PR with a cluster-scoped ob
 Depends on:  p4a-04, p2-24
 Touches:     jarvis-apps/.github/checks/namespaced-only.sh, jarvis-apps/.github/workflows/ci.yml
 Hard limits: R30; R36. D31; D35; D63. The pull_request ci job runs the namespaced-only check and holds no secrets. Cluster-scoped objects fail. A PVC is allowed only for an enrolled stateful app (D51). The admin-gate job added in p2-24 stays on pull_request_target, checks out no PR code, and remains its own required check when branch protection is on. Image publish stays in build.yml on push to main (§6). .github/ on jarvis-apps is protected, so this PR waits for admin-approved.
-Done checks: A seeded PR that adds a ClusterRole fails ci. A seeded unenrolled PVC fails ci. An enrolled stateful fixture passes. apps/demo passes. One PR.
+Done checks: A seeded PR that adds a ClusterRole fails ci. A seeded unenrolled PVC fails ci. An enrolled stateful fixture passes. demo/ passes. One PR.
 ```
 
 ```text
 ID:          p4a-06
 Goal:        Write jarvis-apps/AGENTS.md as the app rulebook.
 Why:         Fix order (§11): the namespaced-only check already enforces the boundary; this file states only what that check cannot (R39).
-Advances:    P4a exit check: “After Gordon adds one line to apps.yaml, the outside app deploys to its own namespace, is reachable at app-<name>.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
+Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-05
 Touches:     jarvis-apps/AGENTS.md
-Hard limits: R30; R39. D63. The builder sees only this repo. The file says apps are stateless by default, namespaced, and free of JARVIS secrets; stateful apps need backup enrollment. It does not copy the jarvis rulebook. This path is protected (R36).
+Hard limits: R30; R39. D63. The builder sees only this repo. The file says apps are stateless by default, namespaced, and free of JARVIS secrets; stateful apps need backup enrollment; each app has one app file, <name>/app.yaml, that matches its folder and asks for any risky item (the env must also grant it, D70). It does not copy the jarvis rulebook. This path is protected (R36).
 Done checks: AGENTS.md is the only rule file in the repo and names the health path and the namespace rule. One PR.
 ```
 
 ```text
 ID:          p4a-07
-Goal:        Extend make verify ENV= with the P4a standing checks (the app Ready, the LAN curl, and, when the observability add-on is enabled, the Gatus row). The network-policy test, the seeded cluster-scoped failure, Gordon’s apps.yaml line and the tailnet check stay outside the script.
-Why:         Done for the checkpoint is the attached verify output (§2). The line in apps.yaml is Gordon’s merge (R36).
-Advances:    P4a exit check: “After Gordon adds one line to apps.yaml, the outside app deploys to its own namespace, is reachable at app-<name>.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
+Goal:        Extend make verify ENV= with the P4a standing checks (the app Ready, the LAN curl, and, when the observability add-on is enabled, the Gatus row). The network-policy test, the seeded cluster-scoped failure, Gordon’s apps list change and the tailnet check stay outside the script.
+Why:         Done for the checkpoint is the attached verify output (§2). The name in the env’s apps list is Gordon’s merge (R36).
+Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Advances:    P4a exit check: “A seeded jarvis-apps PR with a cluster-scoped object fails CI (R30).”
 Depends on:  p4a-03, p4a-04, p4a-05, p4a-06
 Touches:     the env-01 instance repo values/apps.yaml, tools/verify/
-Hard limits: R28; R30; R35; R36. D12 stays the platform fixture; the hosted app is app-demo. D17; D60. make verify reads standing state only. The network-policy test shows the app pod cannot reach Grafana, the ops API, DNS-to-core service ClusterIPs, or the node IP on 443 (Traefik). That test and the seeded cluster-scoped PR are their own runs, attached beside make verify, never inside the script. Tailnet reachability is the [G] check. Gordon’s apps.yaml merge in the instance repo is a Gordon-run step.
-Done checks: make verify ENV=<env> exits 0 with the app Ready in namespace app-demo, the LAN curl, and, when observability is enabled, the Gatus row. The denied-egress log, including the node IP on 443, is its own run attached beside it. The seeded cluster-scoped failure is a seeded PR attached beside it. Owner checklist, pasted outside the script: Gordon’s tailnet [G] paste and his merged apps.yaml line. One PR.
+Hard limits: R28; R30; R35; R36. D12 stays the platform fixture; the hosted app is app-demo. D17; D60. make verify reads standing state only. The network-policy test shows the app pod cannot reach Grafana, the ops API, DNS-to-core service ClusterIPs, or the node IP on 443 (Traefik). That test and the seeded cluster-scoped PR are their own runs, attached beside make verify, never inside the script. Tailnet reachability is the [G] check. Gordon’s merge of the app’s name into the env’s apps list in the instance repo is a Gordon-run step. The apps checks load only for an env that lists an app.
+Done checks: make verify ENV=<env> exits 0 with the app Ready in namespace app-demo, the LAN curl, and, when observability is enabled, the Gatus row. The denied-egress log, including the node IP on 443, is its own run attached beside it. The seeded cluster-scoped failure is a seeded PR attached beside it. Owner checklist, pasted outside the script: Gordon’s tailnet [G] paste and his merged apps list change. One PR.
 ```
 
 ### Exit checks
 
-- After Gordon adds one line to apps.yaml, the outside app deploys to its own namespace, is reachable at app-<name>.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.
+- With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.
 - A seeded jarvis-apps PR with a cluster-scoped object fails CI (R30).
 
 Done = attached make verify ENV=<env> output, plus this phase’s drills and evals as their own runs
