@@ -37,8 +37,8 @@ One list, from §8. Each action names the task that waits on it.
 - Deferred, not a P0b exit requirement: run the coding-agent worker as its own OS user on the bastion, with no SSH keys to nodes, no kubeconfig, no age key or sops config and no access to other users’ homes; it reads and writes only its own repo checkout and pushes through its GitHub token. Until then .cursor/cli.json is the coding agents’ only guard, and live checks stay the operator’s (§2). Trigger: before coding runs that are unattended or take untrusted input (framework §9). Task: none.
 - P0: for each node that has a second disk, the hardware admin prepares and mounts it at the data path, and inventory sets data_disk: true (D42). Example commands are in docs/deploy.md. env-01 has none. Task: p0a-11b.
 - P0: once App DNS and the CA exist, set router forwarding of the env’s DNS suffix and trust envs/<env>/ca.crt on the controller and tailnet test devices (framework §8 step 7). Task: p0b-08.
-- P1 (observability add-on): create the send-only alerts bot with BotFather. Task: p1-09.
-- P1 (observability add-on): send it /start once and record his chat ID. Task: p1-09.
+- P1 (observability component): create the send-only alerts bot with BotFather. Task: p1-09.
+- P1 (observability component): send it /start once and record his chat ID. Task: p1-09.
 - P2: push the first signed release tags, before the chat bot holds real data (D56, D68). Task: p2-08a.
 - P2: signing key lost or compromised: rotate the trusted key in Flux (D56). Task: p2-08a.
 - P2: create concierge’s Telegram token. Task: p2-15.
@@ -333,7 +333,7 @@ Why:         A hostname is one Ingress, and the contract is written before Traef
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0a-18
 Touches:     platform/traefik/CONTRACT.md
-Hard limits: R5; R28. D7. The contract states App DNS answers the name, the wildcard covers it, and, when the observability add-on is enabled, the component adds its own Gatus check, marked planned until Gatus is installed. Gatus trusts the public root and resolves the zone through cluster DNS. Core’s own health is make verify, not Gatus (D69).
+Hard limits: R5; R28. D7. The contract states App DNS answers the name, the wildcard covers it, and, when the observability component is enabled, the component adds its own Gatus check, marked planned until Gatus is installed. Gatus trusts the public root and resolves the zone through cluster DNS. Core’s own health is make verify, not Gatus (D69).
 Done checks: CONTRACT.md has Offers, Expects, Health, Config, and Proven by, naming checks without plan codes. One PR.
 Proven by:   The R5 manifest lint and the reachability checks (§5).
 ```
@@ -392,7 +392,7 @@ Why:         Fix order (§11): components already set the fields (p0b-03 through
 Advances:    P0b exit check: “A test app answers over HTTPS on <svc>.<DNS suffix> (env-01: <svc>.alpha.lan) with a cert from the internal CA, from LAN and from tailnet [G], through Traefik Ingress.”
 Depends on:  p0b-03, p0b-05
 Touches:     ci/checks/manifest-lint, ci/checks/loadbalancer
-Hard limits: R5 (memory request and limit, CPU request, no CPU limit on long-running containers, probes, stdout logs, and a Gatus check once the endpoint exists and the observability add-on is enabled, D69). R28. D30: short-lived chart hooks, Jobs, init containers and test pods keep chart defaults.
+Hard limits: R5 (memory request and limit, CPU request, no CPU limit on long-running containers, probes, stdout logs, and a Gatus check once the endpoint exists and the observability component is enabled, D69). R28. D30: short-lived chart hooks, Jobs, init containers and test pods keep chart defaults.
 Done checks: A seeded manifest missing a memory limit fails. A seeded LoadBalancer besides Traefik and App DNS fails. Current platform manifests pass. One PR, shared with p0b-07 (same area).
 ```
 
@@ -551,7 +551,7 @@ Done = attached make verify ENV=<env> output, plus this phase’s drills and eva
 
 Goal: Gordon sees the system and gets alerts without Hermes.
 
-P1 builds the observability add-on (D69). Its tasks apply to an env that enables it; core’s own health is make verify.
+P1 builds the observability component (D69). Its tasks apply to an env that enables it; core’s own health is make verify.
 
 ### Contracts
 
@@ -917,7 +917,7 @@ Why:         A dead provider has to show an error within about 30 seconds instea
 Advances:    P2 exit check: “Each bot’s evals (≥3) pass against the deployed bots (the eval run attached beside make verify ENV=<env>, R38); usage is readable in Hermes analytics and the grok.com dashboard [G]; with the subscription login revoked or capped (a 401 test fixture stands in; the real login stays signed in), the dashboard and Telegram show an error within ~30 s and the eval run fails (R18).”
 Advances:    P2 exit check: “With the primary model blocked, chat answers from the fallback model; with the provider blocked, the dashboard and Telegram show an error within 30 s and Gatus flags it (R18).”
 Depends on:  p2-13, p2-15, p2-17, p1-08
-Touches:     Gatus provider check (observability add-on), services/hermes/verify.py, llm_provider_host in the env schema, env-01 and env-00
+Touches:     Gatus provider check (observability component), services/hermes/verify.py, llm_provider_host in the env schema, env-01 and env-00
 Hard limits: R8; R18. D19; D20; D39; D45 (llm_provider_host, read by Hermes and the Gatus provider probe, so one override trips both). The capped-login drill is a 401 fixture. The real login stays signed in. The drills restore xai-oauth before the task ends. Hosts in the contract are documentation. This step adds validation of llm_provider_host (D45). The drills are their own runs.
 Done checks: The log shows a fallback-model answer, a dashboard error within 30 seconds when the provider host is overridden, the same dashboard error within about 30 seconds for the 401 fixture, and the eval run failing during that window and passing after restore. Owner checklist: Gordon’s paste from a Telegram message he sends during the drill (D17). One PR.
 ```
@@ -1197,12 +1197,12 @@ Done checks: With app hosting off, or with apps.yaml empty or missing, no app na
 
 ```text
 ID:          p4a-03
-Goal:        When the observability add-on is enabled, have the app wiring write the app’s Gatus endpoint ConfigMap, and load it from a Gatus sidecar.
+Goal:        When the observability component is enabled, have the app wiring write the app’s Gatus endpoint ConfigMap, and load it from a Gatus sidecar.
 Why:         A hosted app has to show up in Gatus without a hand-edited Gatus file (R5, §5). With observability off, app hosting writes no Gatus object (D69).
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-02, p1-08
 Touches:     platform/app-hosting/, services/observability/gatus/
-Hard limits: R5. The ConfigMap is labeled in the observability namespace. The sidecar is the same pattern Grafana uses for dashboards. The check probes the app’s address (<name>.apps.<DNS suffix>) from outside, like a user, at the path it reads from the app file’s network.web.healthPath; if it is missing the path is /, and any answer except a server error (5xx) is healthy. It is always on for hosted apps with network.web on an env with the observability add-on; an app opts out only with the env’s exception line <app>: no-uptime-check, which it reads from the app’s grants ConfigMap (no-uptime-check: "true"); the line needs no ask in the app file (D70). Kubernetes probes stay the app’s own in its deploy/ manifests, separate from this check.
+Hard limits: R5. The ConfigMap is labeled in the observability namespace. The sidecar is the same pattern Grafana uses for dashboards. The check probes the app’s address (<name>.apps.<DNS suffix>) from outside, like a user, at the path it reads from the app file’s network.web.healthPath; if it is missing the path is /, and any answer except a server error (5xx) is healthy. It is always on for hosted apps with network.web on an env with the observability component; an app opts out only with the env’s exception line <app>: no-uptime-check, which it reads from the app’s grants ConfigMap (no-uptime-check: "true"); the line needs no ask in the app file (D70). Kubernetes probes stay the app’s own in its deploy/ manifests, separate from this check.
 Done checks: A fixture listed app produces a Gatus check for <name>.apps.alpha.lan at its health path, or / when it sets none. A fixture app with the env line <app>: no-uptime-check produces none. One PR.
 ```
 
@@ -1241,7 +1241,7 @@ Done checks: AGENTS.md is the only rule file in the repo and names that the imag
 
 ```text
 ID:          p4a-07
-Goal:        Extend make verify ENV= with the P4a standing checks (the app Ready, the LAN curl, and, when the observability add-on is enabled, the Gatus row). The network-policy test, the seeded cluster-scoped failure, Gordon’s apps list change and the tailnet check stay outside the script.
+Goal:        Extend make verify ENV= with the P4a standing checks (the app Ready, the LAN curl, and, when the observability component is enabled, the Gatus row). The network-policy test, the seeded cluster-scoped failure, Gordon’s apps list change and the tailnet check stay outside the script.
 Why:         Done for the checkpoint is the attached verify output (§2). The name in the env’s apps list is Gordon’s merge (R36).
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Advances:    P4a exit check: “A seeded jarvis-apps PR with a cluster-scoped object fails CI (R30).”
