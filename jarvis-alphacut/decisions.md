@@ -458,7 +458,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 ## D54
 
-- Decision: `hermes.yaml`, `apps.yaml`, their validators and `build_agent` are absent from the env schema until the step that adds their consumer. Hermes re-adds `hermes.yaml` at `p2-07`; apps re-add `apps.yaml` at P4a, as a list of app names and exception lines only (D70); build agents arrive as an adapter list with the code factory (`p4b-04`).
+- Decision: `hermes.yaml`, `apps.yaml`, their validators and `build_agent` are absent from the env schema until the step that adds their consumer. Hermes re-adds `hermes.yaml` at `p2-07`; apps re-add `apps.yaml` at P4a, for exception lines and backup selection only, with app names in `values/switches.yaml` (D70, D71); build agents arrive as an adapter list with the code factory (`p4b-04`).
 - Reason: a key with no consumer is a required file that no step reads.
 - Where: `p0a-01`, `p0a-03`, `p0a-05`, `p2-07`, `p4a-02`, `p4b-04`; framework R3, R4, §5 Env schema; D70.
 - Status: Confirmed by Gordon 2026-11-02.
@@ -598,12 +598,13 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 
 - Decision: every env switch lives in one short file, and CI holds the Flux wiring to it.
   - `envs/<env>/values/switches.yaml` lists, by name only, one per line: `core`, `optional`, `addons` and `apps`. `tools/lib/render_switches.py` writes the env's Flux wiring from it (`flux/kustomization.yaml`, `flux/kustomizations/services.yaml`, `flux/platform-configs/kustomization.yaml`, `flux/generated/apps.yaml`, the backup selection), and env-schema fails a committed render that differs. An unknown name fails. Adding a piece never copies a config bundle into an env.
-  - Settings stay out of it. An app's stay in its app file (D70). An env's exception lines and backup selection stay in `values/apps.yaml`.
+  - Settings stay out of it. An app's stay in its app file (D70). An env's exception lines and backup selection stay in `values/apps.yaml`, and an `apps:` key there fails, so app names have one home.
   - `core` names every always-on core component. It turns nothing off, so a missing name fails.
   - `optional` is off until named: app hosting, the off-host copy and the app-only backup server today, each one name. Observability is an optional core component, not an add-on, and joins the list when P1 builds it.
   - `addons` are limited-tenant swappable services: the chat bot slot, the code factory and similar. The chat bot is a slot and Hermes only its first implementation; core never depends on Hermes (D69).
-  - `apps` is the hosted-app list (D70). A listed app must exist in the apps repository; a new app there still never deploys until an env lists it.
+  - `apps` is the hosted-app list (D70). A listed app must exist in the apps repository; a new app there still never deploys until an env lists it. Hosted apps stay untrusted beside the trusted names in this file: listing one switches it on and grants it nothing. It is held to its app file by the cluster, and a risky item still needs both the ask in the app file and the env's exception line.
+  - Backups stay opt-in per app. An app selected under `backups:` needs `apps-backup-server` under `optional`; the render refuses otherwise. Registrations come only from that selection, so a hand-listed one fails as a render that differs. Deleting `backups:` while apps still register fails, so it never reads as turning their backups off: set `selected: []` and re-render first.
   - Shared defaults come first; a setting is per-env only where it means something.
 - Reason: enabling an optional piece took scattered per-env config. One short file says what an env runs, and one render keeps the wiring from drifting.
-- Where: framework R3, R4, §5 App hosting, §6; D47, D69, D70.
+- Where: `p4a-07` and the P4a app-list task; framework R3, R4, R30, §5 App hosting, §6; D47, D51, D54, D69, D70.
 - Status: Owner decision, 2026-11-06.
