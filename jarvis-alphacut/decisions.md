@@ -597,9 +597,9 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
 ## D71
 
 - Decision: every env switch lives in one short file, and CI holds the Flux wiring to it.
-  - `envs/<env>/values/switches.yaml` lists, by name only, one per line: `core`, `optional`, `addons` and `apps`. `tools/lib/render_switches.py` writes the env's Flux wiring from it (`flux/kustomization.yaml`, `flux/kustomizations/services.yaml`, `flux/platform-configs/kustomization.yaml`, `flux/generated/apps.yaml`, the backup selection), and env-schema fails a committed render that differs. An unknown name fails. Adding a piece never copies a config bundle into an env.
+  - `envs/<env>/values/switches.yaml` lists, by name only, one per line: `optional`, `addons` and `apps`. `tools/lib/render_switches.py` writes the env's Flux wiring from it (`flux/kustomization.yaml`, `flux/kustomizations/services.yaml`, `flux/platform-configs/kustomization.yaml`, `flux/generated/apps.yaml`, the backup selection), and env-schema fails a committed render that differs. An unknown name fails. Adding a piece never copies a config bundle into an env.
   - Settings stay out of it. An app's stay in its app file (D70). An env's exception lines and backup selection stay in `values/apps.yaml`, and an `apps:` key there fails, so app names have one home.
-  - `core` names every always-on core component. It turns nothing off, so a missing name fails.
+  - Core has no section. It is on in every env, so a list of it could turn nothing off, and a new core component needs no line per env.
   - `optional` is off until named: app hosting, the off-host copy and the app-only backup server today, each one name. Observability is an optional core component, not an add-on, and joins the list when P1 builds it.
   - `addons` are limited-tenant swappable services: the chat bot slot, the code factory and similar. The chat bot is a slot and Hermes only its first implementation; core never depends on Hermes (D69).
   - `apps` is the hosted-app list (D70). A listed app must exist in the apps repository; a new app there still never deploys until an env lists it. Hosted apps stay untrusted beside the trusted names in this file: listing one switches it on and grants it nothing. It is held to its app file by the cluster, and a risky item still needs both the ask in the app file and the env's exception line.

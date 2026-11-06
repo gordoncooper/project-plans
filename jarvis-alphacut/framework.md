@@ -448,7 +448,7 @@ jarvis/
     env-00/                    never-deployed 7-node example env that sets every schema key (D43)
     env-01/
       README.md                purpose, what deploys, promotion
-      values/                  switches.yaml (what the env enables, by name only: core, optional, addons, apps, D71); cluster-vars.yaml (lowercase keys, including local_path_data, backup_path, ssh_user, age_key_file and the off-host backup target; the rendered ConfigMap publishes an allow-list of cluster keys and host-only keys stay in Ansible; required: dns_suffix, flux_git_repo_url; absent until their consumer: apps_git_repo_url, llm_provider_host, code_delivery, hermes.*). hermes.yaml and apps.yaml are absent until p2-07 and P4a (D54)
+      values/                  switches.yaml (what the env enables, by name only: optional, addons, apps, D71); cluster-vars.yaml (lowercase keys, including local_path_data, backup_path, ssh_user, age_key_file and the off-host backup target; the rendered ConfigMap publishes an allow-list of cluster keys and host-only keys stay in Ansible; required: dns_suffix, flux_git_repo_url; absent until their consumer: apps_git_repo_url, llm_provider_host, code_delivery, hermes.*). hermes.yaml and apps.yaml are absent until p2-07 and P4a (D54)
       inventory/               hosts.yml (one block per node: node_roles and an optional data_disk: true, D42; never IPs)
       flux/                    root GitRepository path: platform-controllers -> platform-configs -> services -> apps (dependsOn); named core source; signed tags once the gate lands in p2-08a, main until then (D56, D68)
       patches/                 Kustomize patches (sizes, node selectors on role labels)
