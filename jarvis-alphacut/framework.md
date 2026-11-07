@@ -430,7 +430,7 @@ jarvis/
     backups/                   controller/ (VolSync, restic rest-server) + config/ (the Kyverno backup policy, the etcd-snapshot CronJob)
     optional/                  optional core pieces, each named for its switch in values/switches.yaml and listed only by an env that names it (D71)
       app-hosting/             the App CRD, admission and derive policies, the apps wildcard cert, and the per-app wiring (ns, default-deny, tenant SA, grants, GitRepositories, impersonated Kustomizations)
-      offsite-copy/            the nightly copy to the env’s off-host target
+      offsite-backup-copy/            the nightly copy to the env’s off-host target
       apps-backup-server/      the restic-apps server
       observability/           not an add-on (D71), built in P1: victoria-metrics, victoria-logs, fluent-bit, vmagent, grafana/{dashboards,alerts}, gatus, verify.py
     testapp/                   the platform canary (D12), on the platform-configs stage
