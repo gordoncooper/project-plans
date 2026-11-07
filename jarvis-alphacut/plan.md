@@ -564,7 +564,7 @@ Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert wi
 Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p0b-13
 Touches:     platform/optional/observability/CONTRACT.md
-Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 80%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18). Before observability lands, point the core `backup: none` allow-list at platform/optional/observability/.
+Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 80%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18). Before observability lands, point the core `backup: none` allow-list at platform/optional/observability/, extend the hand-written ReplicationSource check to that folder, and list it as a contract root.
 Done checks: The Login section and the Alert path section each have Offers, Expects, Health, Config, and Proven by, naming checks without plan codes. One PR.
 Proven by:   The R27 CI check and the dashboard-login check (§5). Grafana anonymous-off is one half. The kill-endpoint alert, the lowered-threshold alerts, and the backup-failure alert.
 ```
@@ -578,7 +578,7 @@ Why:         Grafana’s node, pod, and disk panels need a metrics store that ca
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
 Depends on:  p1-01
 Touches:     platform/optional/observability/victoria-metrics/
-Hard limits: R5; R8; R31 (backup: none, the observability exception). D30. Retention 30 days and -storage.minFreeDiskSpaceBytes (§7). Remove the services placeholder ConfigMap when this path becomes real (D9).
+Hard limits: R5; R8; R31 (backup: none, the observability exception). D30. Retention 30 days and -storage.minFreeDiskSpaceBytes (§7).
 Done checks: The pod is Ready, /metrics answers, and the retention flags are in the manifest. One PR.
 ```
 
