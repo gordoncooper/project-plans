@@ -123,7 +123,7 @@ Why:         Git has to hold the §8 bootstrap secrets before Flux can decrypt o
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-03
 Touches:     tools/bootstrap-secrets, tools/seal, Makefile
-Hard limits: R7; R25; R35. The script creates the internal CA (name-constrained to the env’s DNS suffix, D57) and, for each add-on the env enables, the secrets that add-on declares (Examples: observability’s Grafana admin password; each Hermes deploy’s API key, dashboard password hash and signing secret, D16). It hard-codes no add-on name and mints nothing for an add-on the env leaves off (D69). The core restic credential and the per-app credentials land in p0b-09d (D51). It never overwrites. The real age private key stays out of CI (D33). Two copies of one age key; a repo command test-decrypts one secret and prints only pass or fail (D50). D10: only a restic secret is referenced in-cluster at P0a. Both tools take an explicit env (D45). A .sops.yaml rule for an env that does not exist fails (D55).
+Hard limits: R7; R25; R35. The script creates the internal CA (name-constrained to the env’s DNS suffix, D57) and, for each add-on or optional core component the env enables, the secrets it declares (Examples: observability’s Grafana admin password; each Hermes deploy’s API key, dashboard password hash and signing secret, D16). It hard-codes no add-on or component name and mints nothing for one the env leaves off (D69). The core restic credential and the per-app credentials land in p0b-09d (D51). It never overwrites. The real age private key stays out of CI (D33). Two copies of one age key; a repo command test-decrypts one secret and prints only pass or fail (D50). D10: only a restic secret is referenced in-cluster at P0a. Both tools take an explicit env (D45). A .sops.yaml rule for an env that does not exist fails (D55).
 Done checks: A unit test with a throwaway age key shows a second run leaves the files byte-identical. make bootstrap-secrets runs on the controller, by Gordon or the agent user since it needs only the .sops.yaml public recipient (D17), and its SOPS output is committed. One PR.
 ```
 
@@ -345,7 +345,7 @@ Why:         Every PVC uses one shared backup contract before VolSync is install
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no app credential opens a core repository (R31, D48, D51).”
 Depends on:  p0a-18
 Touches:     platform/backups/CONTRACT.md
-Hard limits: R31. D7; D48; D51; D67. Target path, off-host target, retention, and weekly prune come from cluster-vars.yaml. Every PVC is enrolled by the backup policy, and restore is make restore ENV=<env> APP=<app> and make restore-all ENV=<env> (D47). Operations holds the restore, CA-rotation, restic-rotation and age-key recovery runbooks. The opt-out is the unprefixed annotation backup: none on a PVC or on a volumeClaimTemplate’s metadata, allowed under services/observability/victoria-metrics/, services/observability/victoria-logs/, and the rebuildable-cache class (model weights, build caches). The policy creates one ReplicationSource per claim, including each StatefulSet ordinal; none is written in Git. Core namespaces share one restic credential; each app-<name> namespace gets its own (D51, p0b-09d). The off-host copy is p0b-09e.
+Hard limits: R31. D7; D48; D51; D67. Target path, off-host target, retention, and weekly prune come from cluster-vars.yaml. Every PVC is enrolled by the backup policy, and restore is make restore ENV=<env> APP=<app> and make restore-all ENV=<env> (D47). Operations holds the restore, CA-rotation, restic-rotation and age-key recovery runbooks. The opt-out is the unprefixed annotation backup: none on a PVC or on a volumeClaimTemplate’s metadata, allowed under platform/optional/observability/victoria-metrics/, platform/optional/observability/victoria-logs/, and the rebuildable-cache class (model weights, build caches). The policy creates one ReplicationSource per claim, including each StatefulSet ordinal; none is written in Git. Core namespaces share one restic credential; each app-<name> namespace gets its own (D51, p0b-09d). The off-host copy is p0b-09e.
 Done checks: CONTRACT.md has Offers, Expects, Health, Config, and Proven by, naming checks without plan codes. One PR.
 Proven by:   The R31 CI check and the restore drills (§5).
 ```
@@ -446,7 +446,7 @@ Goal:        Give core one restic credential for all core backups, and each host
 Why:         Core is one trusted zone; hosted apps must not read or harm core or the chat bot’s data (D51, R31).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no app credential opens a core repository (R31, D48, D51).”
 Depends on:  p0b-09a
-Touches:     platform/backups/, tools/bootstrap-secrets, envs/<env>/secrets/<namespace>/, platform/backups/CONTRACT.md
+Touches:     platform/backups/, platform/optional/apps-backup-server/, tools/bootstrap-secrets, envs/<env>/secrets/<namespace>/, platform/backups/CONTRACT.md
 Hard limits: R25; R31. D47; D51. Core namespaces and the host-etcd-snapshots repository use the one core restic password and storage login. Each app-<name> namespace with data gets its own restic credential and private repository, which cannot open core’s or another app’s. Apps use a second server, restic-apps, with --private-repos; it is core, not an add-on, and off by default (one line per env turns it on). Core’s check and off-host copy may hold app passwords. App movers run privileged for now. An app login may forget and prune its own repositories for now; append-only servers with core-run pruning come later. Secrets live under envs/<env>/secrets/<namespace>/; only flux-system decrypts (D53). The core credential lands before the off-host copy (p0b-09e); an app’s credential lands before that app stores data.
 Done checks: A scratch PVC in an app-<name> namespace cannot open a core repository. One PR.
 ```
@@ -479,7 +479,7 @@ Goal:        Add the nightly restic copy of every repository to the env’s off-
 Why:         Same-disk backups cover mistakes, not disk loss (D48, R31). This lands before the first real data volume (p2-09).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no app credential opens a core repository (R31, D48, D51).”
 Depends on:  p0b-09d, p0b-09b, p0b-09c
-Touches:     platform/backups/, schema/ (off-host target), tools/verify/, platform/backups/CONTRACT.md
+Touches:     platform/optional/offsite-copy/, platform/backups/restic-check.yaml, schema/ (off-host target), tools/verify/, platform/backups/CONTRACT.md
 Hard limits: R31. D48; D51. A nightly restic copy of every repository (each volume and the etcd copy) to a per-env off-host target, any restic backend. Core repositories are copied with the core credential; an app’s repositories are copied with that app’s own credential. The target is env config; core stays bastion-agnostic. env-01’s target is, for now, a temporary test target on the bastion that Operator sets up with its own user and append-only access (add, never delete). The bastion copy covers a dead disk, not loss of the site. The off-host password is on the keep-safe list. A scheduled restic check reads part of every repository; verify reports the copy’s freshness and the check’s freshness. A scheduled job younger than one interval is a warning (D17).
 Done checks: verify reports the off-host copy’s freshness. A Job using an app’s credential cannot open a core off-host repository. One PR.
 ```
@@ -551,7 +551,7 @@ Done = attached make verify ENV=<env> output, plus this phase’s drills and eva
 
 Goal: Gordon sees the system and gets alerts without Hermes.
 
-P1 builds the observability component (D69). Its tasks apply to an env that enables it; core’s own health is make verify.
+P1 builds the observability component (D69), an optional core component, not an add-on. An env enables it by listing observability under optional in values/switches.yaml and re-rendering (D71); P1 adds that name. Its tasks apply to an env that enables it; core’s own health is make verify.
 
 ### Contracts
 
@@ -563,8 +563,8 @@ Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and log
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
 Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p0b-13
-Touches:     services/observability/CONTRACT.md
-Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 80%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18). Before observability lands, move the core `backup: none` entries for observability volumes out of core and into an add-on contract field, so core names no add-on.
+Touches:     platform/optional/observability/CONTRACT.md
+Hard limits: R8; R18 (logins work offline: no external IdP); R27. D7; D16. The Hermes dashboard half is added in p2-05. Multi-user OIDC stays the §9 seam. The alert list is disk full, node memory above 80%, node not ready, clock not synchronised, backup failures, and bot cron failures. Bot cron alerts are delivered in P3 (p3-07); the contract names them now. Egress to api.telegram.org is required. The api.x.ai probe is added in P2 (R18). Before observability lands, point the core `backup: none` allow-list at platform/optional/observability/, extend the hand-written ReplicationSource check to that folder, and list it as a contract root.
 Done checks: The Login section and the Alert path section each have Offers, Expects, Health, Config, and Proven by, naming checks without plan codes. One PR.
 Proven by:   The R27 CI check and the dashboard-login check (§5). Grafana anonymous-off is one half. The kill-endpoint alert, the lowered-threshold alerts, and the backup-failure alert.
 ```
@@ -577,8 +577,8 @@ Goal:        Deploy VictoriaMetrics with 30-day retention and the disk floor.
 Why:         Grafana’s node, pod, and disk panels need a metrics store that caps itself (§4, §7, R8).
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
 Depends on:  p1-01
-Touches:     services/observability/victoria-metrics/
-Hard limits: R5; R8; R31 (backup: none, the observability exception). D30. Retention 30 days and -storage.minFreeDiskSpaceBytes (§7). Remove the services placeholder ConfigMap when this path becomes real (D9).
+Touches:     platform/optional/observability/victoria-metrics/
+Hard limits: R5; R8; R31 (backup: none, the observability exception). D30. Retention 30 days and -storage.minFreeDiskSpaceBytes (§7).
 Done checks: The pod is Ready, /metrics answers, and the retention flags are in the manifest. One PR.
 ```
 
@@ -588,7 +588,7 @@ Goal:        Deploy VictoriaLogs with 14-day retention and the disk cap.
 Why:         Grafana has to show logs for every namespace, with a disk cap so logs stay inside §7.
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
 Depends on:  p1-01
-Touches:     services/observability/victoria-logs/
+Touches:     platform/optional/observability/victoria-logs/
 Hard limits: R5; R8; R31 (backup: none). D30. 14-day retention and -retention.maxDiskSpaceUsageBytes around 20 GB (§7).
 Done checks: The pod is Ready and a test line written to stdout is queryable. One PR.
 ```
@@ -599,7 +599,7 @@ Goal:        Deploy vmagent, node-exporter, and kube-state-metrics.
 Why:         Node, pod, and disk metrics have to be scraped into VictoriaMetrics (§4).
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
 Depends on:  p1-03
-Touches:     services/observability/vmagent/
+Touches:     platform/optional/observability/vmagent/
 Hard limits: R5; R8. D30. Scrape node-exporter, kube-state-metrics, and pod /metrics where a component offers it.
 Done checks: vmagent targets for the node and kube-state-metrics are up. One PR.
 ```
@@ -610,7 +610,7 @@ Goal:        Deploy Fluent Bit as a DaemonSet shipping container and node logs t
 Why:         Logs for every namespace have to arrive without a second log stack (§4, OQ9 as recorded in §4).
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
 Depends on:  p1-04
-Touches:     services/observability/fluent-bit/
+Touches:     platform/optional/observability/fluent-bit/
 Hard limits: R5; R8. D30. No fallback shipper.
 Done checks: A log line from kube-system and from platform-testapp is queryable in VictoriaLogs. One PR.
 ```
@@ -621,7 +621,7 @@ Goal:        Deploy Grafana with anonymous access off, Git-managed datasources, 
 Why:         Gordon has to see node, pod, and disk metrics and logs for every namespace (R8, R27).
 Advances:    P1 exit check: “Grafana shows node, pod and disk metrics, and logs for every namespace.”
 Depends on:  p1-05, p1-06
-Touches:     services/observability/grafana/dashboards, services/observability/grafana/
+Touches:     platform/optional/observability/grafana/dashboards, platform/optional/observability/grafana/
 Hard limits: R5; R18; R27. D16; D30. The home dashboard links to Gatus (§4). The admin password is the bootstrap Secret. Login does not call an external IdP.
 Done checks: Opening grafana.alpha.lan asks for login, and the home dashboard shows node, pod, disk, and a logs panel that can filter by namespace. One PR.
 ```
@@ -632,7 +632,7 @@ Goal:        Deploy Gatus with a check for every exposed endpoint, the public CA
 Why:         The status page is the NOC surface that loads without a login on the LAN and the tailnet (R5, R27).
 Advances:    P1 exit check: “Gatus checks every exposed endpoint; its status page (env-01: gatus.alpha.lan) loads without login on LAN and on tailnet [G].”
 Depends on:  p1-07, p0b-08
-Touches:     services/observability/gatus/, platform/traefik/CONTRACT.md
+Touches:     platform/optional/observability/gatus/, platform/traefik/CONTRACT.md
 Hard limits: R5; R8; R27; R28. D12; D13; D30. Gatus resolves alpha.lan through the coredns-custom forward and trusts the committed public root (§5). Checks include testapp, grafana, and gatus, plus TCP/53 for App DNS. The exposure contract’s Gatus check is no longer marked planned.
 Done checks: https://gatus.alpha.lan loads with no login from the LAN and lists those checks. The tailnet load is an owner checklist item (D17). One PR.
 ```
@@ -643,7 +643,7 @@ Goal:        Point Gatus and Grafana at the send-only Telegram alerts bot.
 Why:         Alert delivery has to work while Hermes is absent (R8).
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
 Depends on:  p1-01, p1-08
-Touches:     services/observability/ network policy, Gatus provider, Grafana contact point, SOPS secret
+Touches:     platform/optional/observability/ network policy, Gatus provider, Grafana contact point, SOPS secret
 Hard limits: R8. D39 (egress; api.telegram.org listed as documentation, from observability only). The bot token and chat ID are the SOPS values Gordon records after /start. The alerts bot has no gateway and no allow-list (R21).
 Done checks: A Grafana test notification returns success from the Telegram API. The token value is not printed. One PR.
 ```
@@ -655,7 +655,7 @@ Why:         The P1 check requires those rules to fire in a test, at the §7 thr
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
 Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p1-09
-Touches:     services/observability/grafana/alerts/
+Touches:     platform/optional/observability/grafana/alerts/
 Hard limits: R8; §7 (disk at 80% full, node memory at 80%). D14. The lowered-threshold test is reverted at the end of the run. Backup failure covers the mechanism p0b-09 kept and the etcd-snapshot CronJob (p0b-09b). It is a warning, not a page: it goes through the same alerts bot, once per failure with a long repeat interval, so a missed nightly run informs rather than demands action; the next good run clears it. Every alert goes to the alerts bot’s Telegram chat.
 Done checks: The verify log shows each rule firing under the lowered threshold and the committed rules back at 80%. One PR.
 ```
@@ -692,7 +692,7 @@ Advances:    P1 exit check: “Gatus checks every exposed endpoint; its status p
 Advances:    P1 exit check: “Killing a test endpoint sends a Telegram alert within 5 minutes; the disk, node-memory and clock-not-synchronised alert rules fire in a test with thresholds lowered.”
 Advances:    P1 exit check: “A forced backup failure (VolSync or the etcd-snapshot CronJob) sends a Telegram alert.”
 Depends on:  p1-11, p1-12, p1-08
-Touches:     services/observability/verify.py (the observability verify component)
+Touches:     platform/optional/observability/verify.py (the observability verify component)
 Hard limits: R8; R35. D17; D69 (the component runs only when the env enables observability). The tailnet Gatus load is the [G] line.
 Done checks: make verify ENV=<env> exits 0 with dashboard evidence and the Gatus page. The alert proofs are attached as their own drills. Owner checklist, pasted outside the script: Gordon’s tailnet [G] paste. One PR.
 ```
@@ -746,7 +746,7 @@ Goal:        Add the Hermes dashboard half of the Login contract, with proven by
 Why:         The ops dashboard requires its own login, and that login works offline (R18, R27).
 Advances:    P2 exit check: “The Hermes ops dashboard (hermes-ops.<DNS suffix>) shows up in Gatus (R5) and requires its login (R27).”
 Depends on:  p2-01, p1-01
-Touches:     services/observability/CONTRACT.md, services/hermes/core/CONTRACT.md (how Hermes meets the slot’s URL/ingress and login terms)
+Touches:     platform/optional/observability/CONTRACT.md, services/hermes/core/CONTRACT.md (how Hermes meets the slot’s URL/ingress and login terms)
 Hard limits: R18; R27. D7; D16; D69. Username admin, password hash and signing secret from bootstrap-secrets. The assistant API uses the deploy API key, separate from the dashboard login.
 Done checks: The Login contract names both UIs and the Hermes proven-by line. One PR.
 Proven by:   The R27 CI check and the dashboard-login check (§5).
@@ -1128,7 +1128,7 @@ Goal:        Add a Grafana log alert on Hermes cron errors that pages Telegram w
 Why:         A failed brief still has to reach Gordon when the assistant is the thing that failed (R8).
 Advances:    P3 exit check: “A forced bot cron failure sends a Telegram alert without going through Hermes (a log-based Grafana alert on Hermes cron errors).”
 Depends on:  p3-03, p1-10
-Touches:     services/observability/grafana/alerts/
+Touches:     platform/optional/observability/grafana/alerts/
 Hard limits: R8. The alert queries VictoriaLogs for Hermes cron errors and uses the existing alerts-bot contact point. It does not call the ops deploy.
 Done checks: A planted cron error produces a Telegram send success in the Grafana log, and the ops pod is not in that path. One PR.
 ```
@@ -1176,7 +1176,7 @@ Goal:        Write the App hosting CONTRACT.md with proven by.
 Why:         One name in the env’s apps list is the whole enable path once app hosting is on, and the contract comes before the wiring (§5, R30, D70).
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p2-25
-Touches:     platform/app-hosting/CONTRACT.md
+Touches:     platform/optional/app-hosting/CONTRACT.md
 Hard limits: R4; R30. D7; D63; D70. The contract covers the app file (a field table: required and optional fields, defaults, per-env differences, and the risky items that need an env exception line), namespace, quota, default-deny, service account, per-namespace GitRepository, impersonated Kustomization, the address <name>.apps.<DNS suffix>, and the Gatus ConfigMap. Defaults: 512Mi, 0.5 CPU, and a closed network: no web address, no LAN port, no egress beyond DNS and no caller (D70). Hosted apps are stateless by default; stateful apps are allowed, with backup enrollment, once that app has its own backup credential (D51); a volume may be marked not backed up. App hosting is optional and off by default; an env turns it on with one line in its repo, and with it off the env gets none of the app pieces. apps.yaml is re-added in the instance repo and lists names only (D54, D60).
 Done checks: CONTRACT.md has Offers, Expects, Health, Config, and Proven by, naming checks without plan codes. One PR.
 Proven by:   The reachability, Gatus, and network-policy checks, and the seeded cluster-scoped PR (R30).
@@ -1190,7 +1190,7 @@ Goal:        Add the app-hosting wiring, fed by the env’s apps list and each a
 Why:         Fix order (§11): one name in the env’s apps list is the easy path; the cluster refuses what the app file and the env’s exception lines do not allow, and CI rejects the dangerous objects later (R30, R4, D70).
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-01, p0a-05
-Touches:     platform/app-hosting/, env schema switches.yaml and apps.yaml rules
+Touches:     platform/optional/app-hosting/, env schema switches.yaml and apps.yaml rules
 Hard limits: R1; R4; R30. D30 for the default size: 512Mi and 0.5 CPU, unless the app file sets its own (§7). D54; D60; D63; D70. The env lists app names only under apps: in values/switches.yaml (D71), and values/apps.yaml holds exception lines and backup selection only: no settings per app, and no per-env on/off in the app file. A missing or empty list means no apps. Each app’s GitRepository URL comes from apps_git_repo_url (D45). This step adds the key and its validation. No cross-namespace source refs. Flux may use an optional pull secret (D56). No pull secret for public GHCR. The env schema accepts app hosting on or off: the switch is one name, app-hosting under optional in envs/<env>/values/switches.yaml, off by default, and an env that lists apps with it off fails the schema check. A render script writes one app-<name>-wiring Kustomization per listed app into envs/<env>/flux/generated/apps.yaml. Exception lines go under exceptions: in values/apps.yaml. The cluster, not CI, enforces the app file: an app with no valid app file fails closed, the object matches the file, and a risky item (privileged mode, host access, a custom address outside .apps, a port open to the LAN (lan-port), egress to the LAN (lan-all, or lan-target <name> <cidr> <port>/<proto>)) passes only with an ask in the app file and a matching exception line in the env’s repo. The uptime opt-out (no-uptime-check) is an env exception line with no ask. LAN egress grants need the env’s LAN ranges, lan_cidrs in values/cluster-vars.yaml; a lan-target range sits inside them. Hosted-app internet egress is any port to the internet, never the env’s LAN or cluster ranges (D70). An app cannot take a core or add-on name, and no add-on may be named apps. Stateful apps are allowed only with backup enrollment.
 Done checks: With app hosting off, or with the apps list in values/switches.yaml empty or missing, no app namespace exists. A fixture render with one listed name produces the namespace, quota, default-deny policy, service account, GitRepository, and impersonated Kustomization. A listed name with no valid app file deploys nothing. A risky item without both the ask and the exception line is refused. One PR.
 ```
@@ -1201,7 +1201,7 @@ Goal:        When the observability component is enabled, have the app wiring wr
 Why:         A hosted app has to show up in Gatus without a hand-edited Gatus file (R5, §5). With observability off, app hosting writes no Gatus object (D69).
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-02, p1-08
-Touches:     platform/app-hosting/, services/observability/gatus/
+Touches:     platform/optional/app-hosting/, platform/optional/observability/gatus/
 Hard limits: R5. The ConfigMap is labeled in the observability namespace. The sidecar is the same pattern Grafana uses for dashboards. The check probes the app’s address (<name>.apps.<DNS suffix>) from outside, like a user, at the path it reads from the app file’s network.web.healthPath; if it is missing the path is /, and any answer except a server error (5xx) is healthy. It is always on for hosted apps with network.web on an env with the observability component; an app opts out only with the env’s exception line <app>: no-uptime-check, which it reads from the app’s grants ConfigMap (no-uptime-check: "true"); the line needs no ask in the app file (D70). Kubernetes probes stay the app’s own in its deploy/ manifests, separate from this check.
 Done checks: A fixture listed app produces a Gatus check for <name>.apps.alpha.lan at its health path, or / when it sets none. A fixture app with the env line <app>: no-uptime-check produces none. One PR.
 ```
@@ -1212,7 +1212,7 @@ Goal:        Add demo/ (its app file, Dockerfile and deploy/) and the jarvis-app
 Why:         P4a needs one real app whose image CI publishes as a public GHCR package (§4, R30).
 Advances:    P4a exit check: “With app hosting on, after Gordon adds the app’s name to the env’s apps list, the outside app deploys to its own namespace, is reachable at <name>.apps.<DNS suffix> on LAN and on tailnet [G], shows up in Gatus (R5), and a network-policy test shows it cannot reach core services.”
 Depends on:  p4a-02
-Touches:     jarvis-apps/demo/, jarvis-apps/.github/workflows/build.yml, platform/app-hosting/CONTRACT.md
+Touches:     jarvis-apps/demo/, jarvis-apps/.github/workflows/build.yml, platform/optional/app-hosting/CONTRACT.md
 Hard limits: R5; R10 (Python); R33 (digest). D25; D35; D70. demo/app.yaml is the app’s one app file: its name matches the folder, and it defines everything about the app, including per-env differences, in the keys of the app-hosting contract only (the network section: web with its port and optional healthPath, ports, egress and callers; volumes, resources, risky-item asks and per-env overrides); it holds no image or source. demo/app.yaml sets network.web.port to 8080 and network.web.healthPath to /health (D25). The image and the Kubernetes probes are the app’s own, in demo/deploy/. An app with no valid app file fails closed. deploy/ holds namespaced objects only. The image is a public package; Gordon sets the package public on first publish. build.yml is no longer marked planned in the app-hosting contract.
 Done checks: build.yml publishes the image. The deploy manifests pin a digest. /health answers in a local container run. One PR.
 ```
