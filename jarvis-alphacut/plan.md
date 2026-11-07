@@ -123,7 +123,7 @@ Why:         Git has to hold the §8 bootstrap secrets before Flux can decrypt o
 Advances:    P0a exit check: “From a blank node, every Flux object reports Ready; a second run of bootstrap-secrets and site.yml changes nothing.”
 Depends on:  p0a-03
 Touches:     tools/bootstrap-secrets, tools/seal, Makefile
-Hard limits: R7; R25; R35. The script creates the internal CA (name-constrained to the env’s DNS suffix, D57) and, for each add-on the env enables, the secrets that add-on declares (Examples: observability’s Grafana admin password; each Hermes deploy’s API key, dashboard password hash and signing secret, D16). It hard-codes no add-on name and mints nothing for an add-on the env leaves off (D69). The core restic credential and the per-app credentials land in p0b-09d (D51). It never overwrites. The real age private key stays out of CI (D33). Two copies of one age key; a repo command test-decrypts one secret and prints only pass or fail (D50). D10: only a restic secret is referenced in-cluster at P0a. Both tools take an explicit env (D45). A .sops.yaml rule for an env that does not exist fails (D55).
+Hard limits: R7; R25; R35. The script creates the internal CA (name-constrained to the env’s DNS suffix, D57) and, for each add-on or optional core component the env enables, the secrets it declares (Examples: observability’s Grafana admin password; each Hermes deploy’s API key, dashboard password hash and signing secret, D16). It hard-codes no add-on or component name and mints nothing for one the env leaves off (D69). The core restic credential and the per-app credentials land in p0b-09d (D51). It never overwrites. The real age private key stays out of CI (D33). Two copies of one age key; a repo command test-decrypts one secret and prints only pass or fail (D50). D10: only a restic secret is referenced in-cluster at P0a. Both tools take an explicit env (D45). A .sops.yaml rule for an env that does not exist fails (D55).
 Done checks: A unit test with a throwaway age key shows a second run leaves the files byte-identical. make bootstrap-secrets runs on the controller, by Gordon or the agent user since it needs only the .sops.yaml public recipient (D17), and its SOPS output is committed. One PR.
 ```
 
@@ -446,7 +446,7 @@ Goal:        Give core one restic credential for all core backups, and each host
 Why:         Core is one trusted zone; hosted apps must not read or harm core or the chat bot’s data (D51, R31).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no app credential opens a core repository (R31, D48, D51).”
 Depends on:  p0b-09a
-Touches:     platform/backups/, tools/bootstrap-secrets, envs/<env>/secrets/<namespace>/, platform/backups/CONTRACT.md
+Touches:     platform/backups/, platform/optional/apps-backup-server/, tools/bootstrap-secrets, envs/<env>/secrets/<namespace>/, platform/backups/CONTRACT.md
 Hard limits: R25; R31. D47; D51. Core namespaces and the host-etcd-snapshots repository use the one core restic password and storage login. Each app-<name> namespace with data gets its own restic credential and private repository, which cannot open core’s or another app’s. Apps use a second server, restic-apps, with --private-repos; it is core, not an add-on, and off by default (one line per env turns it on). Core’s check and off-host copy may hold app passwords. App movers run privileged for now. An app login may forget and prune its own repositories for now; append-only servers with core-run pruning come later. Secrets live under envs/<env>/secrets/<namespace>/; only flux-system decrypts (D53). The core credential lands before the off-host copy (p0b-09e); an app’s credential lands before that app stores data.
 Done checks: A scratch PVC in an app-<name> namespace cannot open a core repository. One PR.
 ```
@@ -479,7 +479,7 @@ Goal:        Add the nightly restic copy of every repository to the env’s off-
 Why:         Same-disk backups cover mistakes, not disk loss (D48, R31). This lands before the first real data volume (p2-09).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no app credential opens a core repository (R31, D48, D51).”
 Depends on:  p0b-09d, p0b-09b, p0b-09c
-Touches:     platform/backups/, schema/ (off-host target), tools/verify/, platform/backups/CONTRACT.md
+Touches:     platform/optional/offsite-copy/, schema/ (off-host target), tools/verify/, platform/backups/CONTRACT.md
 Hard limits: R31. D48; D51. A nightly restic copy of every repository (each volume and the etcd copy) to a per-env off-host target, any restic backend. Core repositories are copied with the core credential; an app’s repositories are copied with that app’s own credential. The target is env config; core stays bastion-agnostic. env-01’s target is, for now, a temporary test target on the bastion that Operator sets up with its own user and append-only access (add, never delete). The bastion copy covers a dead disk, not loss of the site. The off-host password is on the keep-safe list. A scheduled restic check reads part of every repository; verify reports the copy’s freshness and the check’s freshness. A scheduled job younger than one interval is a warning (D17).
 Done checks: verify reports the off-host copy’s freshness. A Job using an app’s credential cannot open a core off-host repository. One PR.
 ```
@@ -551,7 +551,7 @@ Done = attached make verify ENV=<env> output, plus this phase’s drills and eva
 
 Goal: Gordon sees the system and gets alerts without Hermes.
 
-P1 builds the observability component (D69). Its tasks apply to an env that enables it; core’s own health is make verify.
+P1 builds the observability component (D69), an optional core component, not an add-on. An env enables it by listing observability under optional in values/switches.yaml and re-rendering (D71); P1 adds that name. Its tasks apply to an env that enables it; core’s own health is make verify.
 
 ### Contracts
 

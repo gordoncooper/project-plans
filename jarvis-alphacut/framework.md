@@ -428,6 +428,7 @@ jarvis/
     app-dns/                   CoreDNS + k8s_gateway
     kyverno/                   Kyverno HelmRelease (classic ClusterPolicy only)
     backups/                   controller/ (VolSync, restic rest-server) + config/ (the Kyverno backup policy, the etcd-snapshot CronJob)
+    optional/                  optional core pieces, each named for its switch in values/switches.yaml and listed only by an env that names it (D71): offsite-copy/, apps-backup-server/
     app-hosting/               optional component: the App CRD, admission and derive policies, the apps wildcard cert, and the per-app wiring (ns, default-deny, tenant SA, grants, GitRepositories, impersonated Kustomizations)
     testapp/                   the platform canary (D12), on the platform-configs stage
   services/                    layer 3: optional add-ons, off by default and enabled per env in the instance repo (D69); each component folder has CONTRACT.md
