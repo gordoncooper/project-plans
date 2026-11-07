@@ -479,7 +479,7 @@ Goal:        Add the nightly restic copy of every repository to the env’s off-
 Why:         Same-disk backups cover mistakes, not disk loss (D48, R31). This lands before the first real data volume (p2-09).
 Advances:    P0b exit check: “Restore drill: a deleted volume is restored by make restore from its rest-server backup and its checksum matches; an etcd snapshot exists for same-node rollback and comes back from its restic copy; verify reports the off-host copy’s freshness and that no app credential opens a core repository (R31, D48, D51).”
 Depends on:  p0b-09d, p0b-09b, p0b-09c
-Touches:     platform/optional/offsite-copy/, schema/ (off-host target), tools/verify/, platform/backups/CONTRACT.md
+Touches:     platform/optional/offsite-copy/, platform/backups/restic-check.yaml, schema/ (off-host target), tools/verify/, platform/backups/CONTRACT.md
 Hard limits: R31. D48; D51. A nightly restic copy of every repository (each volume and the etcd copy) to a per-env off-host target, any restic backend. Core repositories are copied with the core credential; an app’s repositories are copied with that app’s own credential. The target is env config; core stays bastion-agnostic. env-01’s target is, for now, a temporary test target on the bastion that Operator sets up with its own user and append-only access (add, never delete). The bastion copy covers a dead disk, not loss of the site. The off-host password is on the keep-safe list. A scheduled restic check reads part of every repository; verify reports the copy’s freshness and the check’s freshness. A scheduled job younger than one interval is a warning (D17).
 Done checks: verify reports the off-host copy’s freshness. A Job using an app’s credential cannot open a core off-host repository. One PR.
 ```
