@@ -57,13 +57,13 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Build agent: `docs/build-agent/CONTRACT.md`
   - Exposure: `platform/traefik/CONTRACT.md` (cert-manager and app-dns component contracts point at it)
   - Backups: `platform/backups/CONTRACT.md`
-  - Login and alert path: `services/observability/CONTRACT.md`
+  - Login and alert path: `platform/optional/observability/CONTRACT.md`
   - Chat-bot slot contract: `services/slots/chat-bot/CONTRACT.md`. It covers hosting, storage, backups, secrets and URL/ingress, and holds the model provider, assistant API and skill contract sections (D69).
   - Hermes core: `services/hermes/core/CONTRACT.md` says how Hermes meets the chat-bot slot. The profile schema and the deploy contracts below stay with Hermes.
   - Each Hermes deploy (`services/hermes/deploy/ops`, `services/hermes/deploy/code-factory`) is a component root; its `CONTRACT.md` lists the R13 egress hosts it uses.
   - Sandbox: `services/hermes/deploy/code-factory/sandbox/CONTRACT.md`
   - Code-factory work protocol: `services/hermes/deploy/code-factory/CONTRACT.md`
-  - App hosting: `platform/app-hosting/CONTRACT.md`
+  - App hosting: `platform/optional/app-hosting/CONTRACT.md`
 - Reason: §5 requires a `CONTRACT.md` from one template, and the layout names only the code-delivery and build-agent paths.
 - Where: every contract task.
 - Status: accepted-with-plan default.
@@ -601,7 +601,7 @@ These are the §11 defaults. They are recorded here. They are not copied into fr
   - Settings stay out of it. An app's stay in its app file (D70). An env's exception lines and backup selection stay in `values/apps.yaml`, and an `apps:` key there fails, so app names have one home.
   - Core has no section. It is on in every env, so a list of it could turn nothing off, and a new core component needs no line per env.
   - `optional` is off until named: app hosting, the off-host copy and the app-only backup server today, each one name. Observability is an optional core component, not an add-on. An env enables it the same way, by listing `observability` under `optional` and re-rendering; P1 adds the name, and until then the render and env-schema refuse it, so it is off everywhere.
-  - An optional piece’s files live under `platform/optional/<name>/`, named for its switch: `offsite-copy` and `apps-backup-server`. Always-on trees such as `platform/backups/` keep only what every env needs. App hosting stays at `platform/app-hosting/`, because every app’s rendered wiring carries that path.
+  - An optional piece’s files live under `platform/optional/<name>/`, named for its switch: `app-hosting`, `offsite-copy` and `apps-backup-server` today, `observability` when P1 builds it. Always-on trees such as `platform/backups/` keep only what every env needs, including the app rules in always-on objects such as the backup policy and `restic-check`.
   - `addons` are limited-tenant swappable services: the chat bot slot, the code factory and similar. The chat bot is a slot and Hermes only its first implementation; core never depends on Hermes (D69).
   - `apps` is the hosted-app list (D70). A listed app must exist in the apps repository; a new app there still never deploys until an env lists it. Hosted apps stay untrusted beside the trusted names in this file: listing one switches it on and grants it nothing. It is held to its app file by the cluster, and a risky item still needs both the ask in the app file and the env's exception line.
   - Backups stay opt-in per app. An app selected under `backups:` needs `apps-backup-server` under `optional`; the render refuses otherwise. Registrations come only from that selection, so a hand-listed one fails as a render that differs. Deleting `backups:` while apps still register fails, so it never reads as turning their backups off: set `selected: []` and re-render first.
